@@ -18,3 +18,10 @@
 - Mỗi người sẽ chỉ push code lên nhánh cá nhân
 - Pull request và review tại nhánh developer
 - Sau khi code tại nhánh developer ổn định => Merge từ developer vào master
+
+
+duy-dev -- A => pull request Developer => Merge (Developer) ==> Dương kiểm tra ok ==> Merge Master
+vu-dev -- B  => pull request Developer => Merge (Developer) ==> Dương kiểm tra ok ==> Merge Master
+
+duv-dev -- C ==> pull request Developer => Merge (Developer)
+vu-dev -- C ==> pull request Developer => Merge (Developer)
