@@ -1,0 +1,55 @@
+---
+BasedOnStyle: LLVM
+IndentWidth: 3
+UseTab: Never
+BreakBeforeBraces: Attach
+BreakBeforeBinaryOperators: All
+# AllowAllArgumentsOnNextLine: true
+AlignConsecutiveAssignments:
+  Enabled: true
+  AcrossEmptyLines: true
+  AcrossComments: false
+  AlignCompound: true
+  AlignFunctionDeclarations: true
+  AlignFunctionPointers: true
+  PadOperators: true
+AlignConsecutiveDeclarations:
+  Enabled: true
+  AcrossEmptyLines: true
+  AcrossComments: false
+  AlignCompound: true
+  AlignFunctionDeclarations: true
+  AlignFunctionPointers: true
+  PadOperators: true
+AlignConsecutiveShortCaseStatements:
+  Enabled: true
+  AcrossEmptyLines: true
+  AcrossComments: false
+  AlignCaseColons: true
+AlignTrailingComments:
+  Kind: Always
+  OverEmptyLines: 2
+AllowShortBlocksOnASingleLine: Always
+AllowShortCaseExpressionOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortEnumsOnASingleLine: true
+AllowShortLoopsOnASingleLine: false
+ColumnLimit: 100
+SpaceBeforeParens: Never
+PointerAlignment: Right
+
+BinPackParameters: false
+BinPackArguments: false
+AlignAfterOpenBracket: BlockIndent
+AllowAllArgumentsOnNextLine: false
+ContinuationIndentWidth: 3
+InsertBraces: false
+KeepEmptyLines:
+  AtEndOfFile: false
+  AtStartOfBlock: false
+  AtStartOfFile: false
+ReferenceAlignment: Right
+AlwaysBreakAfterReturnType: None
+AlwaysBreakAfterDefinitionReturnType: None
+AllowShortFunctionsOnASingleLine: Inline  # thay vì false
+PenaltyReturnTypeOnItsOwnLine: 1000       # phạt nặng nếu xuống dòng sau return type
