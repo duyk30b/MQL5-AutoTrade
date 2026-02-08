@@ -1,6 +1,13 @@
 *
+
+!.vscode/
+!.vscode/settings-example.json
+!.vscode/extensions.json
+
 !.gitignore
+!.clang-format
 !SETUP.md
+
 !Experts/
 !Experts/AutoTrade/
 !Experts/AutoTrade/**
