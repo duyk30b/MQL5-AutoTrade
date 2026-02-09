@@ -21,7 +21,8 @@ input bool AutoTradeEnabled = false;  // Bật/tắt chế độ tự động kh
 input int RSI_Period = 14;            // Chu kỳ RSI (14 là chuẩn)
 input int MA_Fast = 10;               // Chu kỳ MA nhanh
 input int MA_Slow = 20;               // Chu kỳ MA chậm
-input int UiUpdateMs = 250;           // Chu ky cap nhat UI (ms)
+input int AutoCheckSeconds = 60;      // Check auto signals mỗi X giây (0 = mỗi tick)
+input int UIUpdateSeconds = 1;        // Cập nhật UI mỗi X giây (0 = tắt)
 
 // === BIẾN GLOBAL - Được sử dụng xuyên suốt chương trình ===
 CTrade trade;                    // Đối tượng giao dịch (từ Trade.mqh)
@@ -29,6 +30,7 @@ bool panelCreated;               // Cờ kiểm tra panel đã được tạo ch
 int handleRSI, handleMA_Fast, handleMA_Slow;  // Handle (tham chiếu) đến indicator
 bool isAutoMode;                 // Cờ chế độ tự động
 datetime lastBar;                // Thời gian nến cuối cùng (để chỉ trade 1 lần/nến)
+datetime lastUIUpdate;           // Thời gian update UI lần cuối
 
 // === MẢNG UI OBJECTS - Danh sách các đối tượng giao diện ===
 string UI[] = {"panelBG","panelHeader","lblTitle","lblMode","lblInfo","lblProfit","edtSL","edtTP",
@@ -43,9 +45,19 @@ int OnInit()
    ChartSetInteger(0, CHART_EVENT_MOUSE_MOVE, true);
    
    // Chỉ tạo UI nếu không phải Optimization Mode
-   if(!MQLInfoInteger(MQL_OPTIMIZATION)) CreatePanel();
+   if(!MQLInfoInteger(MQL_OPTIMIZATION)) 
+   {
+      CreatePanel();
+      UpdateInfo();  // Update lần đầu
+   }
 
-   if(UiUpdateMs > 0) EventSetMillisecondTimer(UiUpdateMs);
+   // Timer: Dùng interval nhỏ nhất giữa AutoCheck và UIUpdate
+   int timerInterval = AutoCheckSeconds;
+   if(UIUpdateSeconds > 0 && (timerInterval == 0 || UIUpdateSeconds < timerInterval))
+      timerInterval = UIUpdateSeconds;
+   if(timerInterval > 0) EventSetTimer(timerInterval);
+   
+   lastUIUpdate = TimeCurrent();
    
    // Khởi tạo 3 indicator cho auto trading
    handleRSI = iRSI(_Symbol, PERIOD_CURRENT, RSI_Period, PRICE_CLOSE);
@@ -68,12 +80,24 @@ void OnDeinit(const int reason)
 // === TICK - Gọi mỗi khi có tick mới ===
 void OnTick()
 {
-   if(isAutoMode) CheckAutoSignals();  // Kiểm tra tín hiệu auto nếu bật
+   // Nếu AutoCheckSeconds = 0, check mỗi tick
+   if(AutoCheckSeconds == 0 && isAutoMode) CheckAutoSignals();
+   if(ObjectGetInteger(0,"btnBuy",OBJPROP_STATE)==1)OpenBuy();
+   if(ObjectGetInteger(0,"btnSell",OBJPROP_STATE)==1) OpenSell();
+   
 }
 
 void OnTimer()
 {
-   UpdateInfo();
+   // Update UI nếu đủ thời gian
+   if(UIUpdateSeconds > 0 && TimeCurrent() - lastUIUpdate >= UIUpdateSeconds)
+   {
+      UpdateInfo();
+      lastUIUpdate = TimeCurrent();
+   }
+   
+   // Check auto signals nếu bật
+   if(isAutoMode) CheckAutoSignals();
 }
 
 void OnTradeTransaction(const MqlTradeTransaction& trans,const MqlTradeRequest& req,const MqlTradeResult& res)
@@ -199,8 +223,10 @@ void CreateButton(string name, int x, int y, int w, int h, string txt, color clr
    ObjectSetInteger(0, name, OBJPROP_COLOR, clrWhite);    // Màu chữ (trắng)
    ObjectSetInteger(0, name, OBJPROP_BGCOLOR, clr);       // Màu nền nút
    ObjectSetInteger(0, name, OBJPROP_FONTSIZE, size);     // Cỡ chữ
-   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, true);   // Cho phép bấm
+   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);   // Cho phép bấm
    ObjectSetInteger(0, name, OBJPROP_ZORDER, 10);         // Hiển thị phía trước
+   ObjectSetInteger(0, name, OBJPROP_STATE,false);          // Trạng thái nút (0=không bấm)
+   ObjectSetInteger(0, name, OBJPROP_SELECTED,false);
 }
 
 void CreateEdit(string name, int x, int y, int w, int h, string txt)
@@ -263,6 +289,7 @@ void OpenBuy()
    if(!SymbolInfoTick(_Symbol, tick)) return;
    // 3. Tính giá SL = Ask - SL (points), Giá TP = Ask + TP (points)
    trade.Buy(LotSize, _Symbol, tick.ask, tick.ask - sl*_Point, tick.ask + tp*_Point, "Buy");
+   UpdateInfo();  // Update UI sau khi trade
 }
 
 void OpenSell()
@@ -279,6 +306,7 @@ void OpenSell()
    if(!SymbolInfoTick(_Symbol, tick)) return;
    // 3. Tính giá SL = Bid + SL (points), Giá TP = Bid - TP (points)
    trade.Sell(LotSize, _Symbol, tick.bid, tick.bid + sl*_Point, tick.bid - tp*_Point, "Sell");
+   UpdateInfo();  // Update UI sau khi trade
 }
 
 void ModifyStopLoss()
@@ -300,6 +328,7 @@ void ModifyStopLoss()
          trade.PositionModify(PositionGetInteger(POSITION_TICKET), newSL, tp);
       }
    }
+   UpdateInfo();  // Update UI sau khi modify
 }
 
 void ModifyTakeProfit()
@@ -321,6 +350,7 @@ void ModifyTakeProfit()
          trade.PositionModify(PositionGetInteger(POSITION_TICKET), sl, newTP);
       }
    }
+   UpdateInfo();  // Update UI sau khi modify
 }
 
 void ModifyBoth()
@@ -342,6 +372,7 @@ void ModifyBoth()
          trade.PositionModify(PositionGetInteger(POSITION_TICKET), newSL, newTP);
       }
    }
+   UpdateInfo();  // Update UI sau khi modify
 }
 
 void CheckAutoSignals()
@@ -355,11 +386,23 @@ void CheckAutoSignals()
    // Lấy giá trị hiện tại và giá trị candle trước của các chỉ báo
    double rsi[1], maf[1], mas[1], rsi_p[1], maf_p[1], mas_p[1];
    // RSI(14) buffer 0
-   if(CopyBuffer(handleRSI, 0, 1, 1, rsi) < 1 || CopyBuffer(handleRSI, 0, 2, 1, rsi_p) < 1) return;
+   if(CopyBuffer(handleRSI, 0, 1, 1, rsi) < 1 || CopyBuffer(handleRSI, 0, 2, 1, rsi_p) < 1) 
+   {
+      Print("❌ Không lấy được RSI data");
+      return;
+   }
    // MA Fast(10) buffer 0
-   if(CopyBuffer(handleMA_Fast, 0, 1, 1, maf) < 1 || CopyBuffer(handleMA_Fast, 0, 2, 1, maf_p) < 1) return;
+   if(CopyBuffer(handleMA_Fast, 0, 1, 1, maf) < 1 || CopyBuffer(handleMA_Fast, 0, 2, 1, maf_p) < 1) 
+   {
+      Print("❌ Không lấy được MA Fast data");
+      return;
+   }
    // MA Slow(20) buffer 0
-   if(CopyBuffer(handleMA_Slow, 0, 1, 1, mas) < 1 || CopyBuffer(handleMA_Slow, 0, 2, 1, mas_p) < 1) return;
+   if(CopyBuffer(handleMA_Slow, 0, 1, 1, mas) < 1 || CopyBuffer(handleMA_Slow, 0, 2, 1, mas_p) < 1) 
+   {
+      Print("❌ Không lấy được MA Slow data");
+      return;
+   }
    
    // ✓ Kiểm tra xem đã có position nào open rồi không
    bool pos_exists = false;
@@ -372,13 +415,40 @@ void CheckAutoSignals()
       }
    }
    
+   // DEBUG: In ra giá trị các indicator
+   Print(StringFormat("📊 RSI=%.2f | MA Fast=%.5f | MA Slow=%.5f | Pos=%s", 
+                      rsi[0], maf[0], mas[0], pos_exists ? "Yes" : "No"));
+   
    // ✓ Nếu chưa có position, kiểm tra tín hiệu giao dịch:
-   //   BUY: MA Fast vượt lên trên MA Slow (golden cross) + RSI > 50 (xu hướng up)
-   //   SELL: MA Fast rơi xuống dưới MA Slow (death cross) + RSI < 50 (xu hướng down)
+   //   BUY: MA Fast > MA Slow (uptrend) + RSI > 50 (momentum tăng)
+   //   SELL: MA Fast < MA Slow (downtrend) + RSI < 50 (momentum giảm)
    if(!pos_exists)
    {
-      if(maf_p[0] <= mas_p[0] && maf[0] > mas[0] && rsi[0] > 50) OpenBuy();   // Golden Cross
-      else if(maf_p[0] >= mas_p[0] && maf[0] < mas[0] && rsi[0] < 50) OpenSell();  // Death Cross
+      // BUY signal - Đơn giản hơn, dễ trigger hơn
+      if(maf[0] > mas[0] && rsi[0] > 50) 
+      {
+         Print("🟢 BUY Signal: Uptrend + RSI bullish");
+         OpenBuy();
+      }
+      // SELL signal
+      else if(maf[0] < mas[0] && rsi[0] < 50) 
+      {
+         Print("🔴 SELL Signal: Downtrend + RSI bearish");
+         OpenSell();
+      }
+      else
+      {
+         // In lý do không trade
+         string reason = "";
+         if(maf[0] > mas[0]) reason += "Uptrend nhưng RSI=" + DoubleToString(rsi[0], 1) + " < 50";
+         else if(maf[0] < mas[0]) reason += "Downtrend nhưng RSI=" + DoubleToString(rsi[0], 1) + " > 50";
+         else reason += "MA bằng nhau, đợi tín hiệu rõ hơn";
+         Print("⏸️ No signal: " + reason);
+      }
+   }
+   else
+   {
+      Print("⏸️ Đã có position mở rồi, không trade thêm");
    }
 }
 
