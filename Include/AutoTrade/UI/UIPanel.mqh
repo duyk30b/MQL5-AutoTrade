@@ -1,6 +1,9 @@
 //+------------------------------------------------------------------+
 //|      PanelLibrary.mqh  | | Thư viện Panel tùy chỉnh cho MT5      |
 //+------------------------------------------------------------------+
+#ifndef UI_PANEL_MQH
+#define UI_PANEL_MQH
+
 #property copyright "Custom Panel Library"
 #property link ""
 #property version "1.00"
@@ -40,21 +43,32 @@ class UIPanel {
    int  m_mouseStartY;   // Vị trí Y bắt đầu kéo
 
    // Thuộc tính
-   string     m_headerTitle;     // Tiêu đề panel
-   color      m_headerBgColor;   // Màu header
-   color      m_headerTextColor; // Màu chữ
-   int        m_headerHeight;    // Chiều cao header
-   color      m_contentBgColor;  // Màu nền
-   color      m_borderColor;     // Màu viền
+   string     m_headerTitle;             // Tiêu đề panel
+   int        m_headerHeight;            // Chiều cao header
 
-   PanelChild m_panelChildren[];
+   color      m_headerBgColor;           // Màu header
+   color      m_headerTextColor;         // Màu chữ
+   color      m_headerButtonBgColor;     // Màu viền
+   color      m_headerButtonBorderColor; // Màu viền
+   color      m_contentBgColor;          // Màu nền
+   color      m_borderColor;             // Màu viền
+
+   PanelChild m_panelHeader;
+   PanelChild m_panelHeaderTitle;
+   PanelChild m_panelHeaderBtnLock;
+   PanelChild m_panelHeaderBtnMin;
+   PanelChild m_panelHeaderBtnClose;
+   PanelChild m_panelContentBackground;
+
+   PanelChild m_panelContents[];
+   PanelChild m_panelControlls[];
 
  public:
    UIPanel();
    ~UIPanel();
 
    // Khởi tạo panel
-   bool Create(long chart, string name, int x, int y, int width, int height);
+   bool Initialization(long chartId, string name, int x, int y, int width, int height);
    void PanelDestroy();
    void PanelRefreshPosition(int panelX, int panelY);
    void PanelRedrawChart();
@@ -74,6 +88,7 @@ class UIPanel {
 
    // Thêm control vào danh sách quản lý
    void AddPanelChild(string name, int offsetX, int offsetY);
+   void AddPanelChildName(string name);
 
    // Xử lý sự kiện
    bool OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
@@ -84,11 +99,12 @@ class UIPanel {
    bool CreateHeaderTitle();
    bool CreateHeaderButtonMin();
    bool CreateHeaderButtonLock();
+   bool CreateHeaderButtonClose();
    bool CreateContentBackground();
 
    // Xử lý thu nhỏ/phóng to
    void ToggleMinimize();
-   void RefreshMoveUI();
+   void RefreshMoveStateUI();
 
    // Xử lý kéo thả
    void DoDrag(int x, int y);
@@ -108,30 +124,10 @@ UIPanel::~UIPanel() {
 }
 
 //+------------------------------------------------------------------+
-//| Xóa object |
-//+------------------------------------------------------------------+
-void UIPanel::PanelDestroy() {
-   for(int i = 0; i < ArraySize(m_panelChildren); i++) {
-      if(ObjectFind(m_chartId, m_panelChildren[i].name) >= 0) {
-         ObjectDelete(m_chartId, m_panelChildren[i].name);
-      }
-   }
-   ArrayResize(m_panelChildren, 0);
-   PanelRedrawChart();
-}
-
-//+------------------------------------------------------------------+
-//| Redraw chart |
-//+------------------------------------------------------------------+
-void UIPanel::PanelRedrawChart() {
-   ChartRedraw(m_chartId);
-}
-
-//+------------------------------------------------------------------+
 //| Tạo panel |
 //+------------------------------------------------------------------+
-bool UIPanel::Create(long chart, string name, int x, int y, int width, int height) {
-   m_chartId         = chart;
+bool UIPanel::Initialization(long chartId, string name, int x, int y, int width, int height) {
+   m_chartId         = chartId;
    m_name            = name;
    m_panelX          = x;
    m_panelY          = y;
@@ -147,30 +143,36 @@ bool UIPanel::Create(long chart, string name, int x, int y, int width, int heigh
    m_headerTitle     = "UIPanel";
    m_headerTextColor = clrWhite;
    // clang-format off
-   m_headerBgColor     = C'25,25,112'; // Navy blue
-   m_contentBgColor         = C'45,45,45'; // Dark gray
+   m_headerBgColor   = C'25,25,112'; // Navy blue
+   m_headerButtonBgColor = C'60,60,60'; // Dark gray
+   m_headerButtonBorderColor = C'80,80,80'; // Dark gray
+   m_contentBgColor  = C'45,45,45'; // Dark gray
    m_borderColor     = C'70,70,70'; // Light gray
    // clang-format on
-   ArrayResize(m_panelChildren, 5);
-   m_panelChildren[0].name    = m_name + "_Header";
-   m_panelChildren[0].offsetX = 0;
-   m_panelChildren[0].offsetY = 0;
 
-   m_panelChildren[1].name    = m_name + "_Header_Title";
-   m_panelChildren[1].offsetX = 10;
-   m_panelChildren[1].offsetY = 8;
+   m_panelHeader.name               = m_name + "_Header";
+   m_panelHeader.offsetX            = 0;
+   m_panelHeader.offsetY            = 0;
 
-   m_panelChildren[2].name    = m_name + "_Header_BtnMinimized";
-   m_panelChildren[2].offsetX = m_width - 25;
-   m_panelChildren[2].offsetY = 5;
+   m_panelHeaderTitle.name          = m_name + "_Header_Title";
+   m_panelHeaderTitle.offsetX       = 10;
+   m_panelHeaderTitle.offsetY       = 8;
 
-   m_panelChildren[3].name    = m_name + "_Header_BtnLock";
-   m_panelChildren[3].offsetX = m_width - 50;
-   m_panelChildren[3].offsetY = 5;
+   m_panelHeaderBtnMin.name         = m_name + "_Header_BtnMinimized";
+   m_panelHeaderBtnMin.offsetX      = m_width - 75;
+   m_panelHeaderBtnMin.offsetY      = 5;
 
-   m_panelChildren[4].name    = m_name + "_Content_BackGround";
-   m_panelChildren[4].offsetX = 0;
-   m_panelChildren[4].offsetY = m_headerHeight;
+   m_panelHeaderBtnLock.name        = m_name + "_Header_BtnLock";
+   m_panelHeaderBtnLock.offsetX     = m_width - 50;
+   m_panelHeaderBtnLock.offsetY     = 5;
+
+   m_panelHeaderBtnClose.name       = m_name + "_Header_BtnClose";
+   m_panelHeaderBtnClose.offsetX    = m_width - 25;
+   m_panelHeaderBtnClose.offsetY    = 5;
+
+   m_panelContentBackground.name    = m_name + "_Content_BackGround";
+   m_panelContentBackground.offsetX = 0;
+   m_panelContentBackground.offsetY = m_headerHeight;
 
    // Tạo các thành phần
    if(!CreateHeader())
@@ -181,35 +183,57 @@ bool UIPanel::Create(long chart, string name, int x, int y, int width, int heigh
       return false;
    if(!CreateHeaderButtonLock())
       return false;
+   if(!CreateHeaderButtonClose())
+      return false;
    if(!CreateContentBackground())
       return false;
 
-   for(int i = 0; i < ArraySize(m_panelChildren); i++) {
-      ObjectSetInteger(
-         m_chartId,
-         m_panelChildren[i].name,
-         OBJPROP_XDISTANCE,
-         m_panelX + m_panelChildren[i].offsetX
-      );
-      ObjectSetInteger(
-         m_chartId,
-         m_panelChildren[i].name,
-         OBJPROP_YDISTANCE,
-         m_panelX + m_panelChildren[i].offsetY
-      );
-   }
-   PanelRedrawChart();
+   ArrayResize(m_panelContents, 0);
+   ArrayResize(m_panelControlls, 6);
+   m_panelControlls[0] = m_panelHeader;
+   m_panelControlls[1] = m_panelHeaderTitle;
+   m_panelControlls[2] = m_panelHeaderBtnMin;
+   m_panelControlls[3] = m_panelHeaderBtnLock;
+   m_panelControlls[4] = m_panelHeaderBtnClose;
+   m_panelControlls[5] = m_panelContentBackground;
    return true;
+}
+
+//+------------------------------------------------------------------+
+//| Xóa object |
+//+------------------------------------------------------------------+
+void UIPanel::PanelDestroy() {
+   for(int i = 0; i < ArraySize(m_panelControlls); i++) {
+      if(ObjectFind(m_chartId, m_panelControlls[i].name) >= 0) {
+         ObjectDelete(m_chartId, m_panelControlls[i].name);
+      }
+   }
+   for(int i = 0; i < ArraySize(m_panelContents); i++) {
+      if(ObjectFind(m_chartId, m_panelContents[i].name) >= 0) {
+         ObjectDelete(m_chartId, m_panelContents[i].name);
+      }
+   }
+   ArrayResize(m_panelControlls, 0);
+   ArrayResize(m_panelContents, 0);
+   PanelRedrawChart();
+}
+
+//+------------------------------------------------------------------+
+//| Redraw chart |
+//+------------------------------------------------------------------+
+void UIPanel::PanelRedrawChart() {
+   ChartRedraw(m_chartId);
 }
 
 //+------------------------------------------------------------------+
 //| Tạo header |
 //+------------------------------------------------------------------+
 bool UIPanel::CreateHeader() {
-   string objName = m_panelChildren[0].name;
+   string objName = m_panelHeader.name;
    if(!ObjectCreate(m_chartId, objName, OBJ_RECTANGLE_LABEL, 0, 0, 0))
       return false;
-
+   ObjectSetInteger(m_chartId, objName, OBJPROP_XDISTANCE, m_panelX + m_panelHeader.offsetX);
+   ObjectSetInteger(m_chartId, objName, OBJPROP_YDISTANCE, m_panelX + m_panelHeader.offsetY);
    ObjectSetInteger(m_chartId, objName, OBJPROP_XSIZE, m_width);
    ObjectSetInteger(m_chartId, objName, OBJPROP_YSIZE, m_headerHeight);
    ObjectSetInteger(m_chartId, objName, OBJPROP_COLOR, m_borderColor);
@@ -217,8 +241,7 @@ bool UIPanel::CreateHeader() {
    ObjectSetInteger(m_chartId, objName, OBJPROP_BORDER_TYPE, BORDER_FLAT);
    ObjectSetInteger(m_chartId, objName, OBJPROP_CORNER, CORNER_LEFT_UPPER);
    ObjectSetInteger(m_chartId, objName, OBJPROP_BACK, false);
-   ObjectSetInteger(m_chartId, objName, OBJPROP_SELECTABLE,
-                    true); // Cho phép click
+   ObjectSetInteger(m_chartId, objName, OBJPROP_SELECTABLE, true); // Cho phép click
    ObjectSetInteger(m_chartId, objName, OBJPROP_SELECTED, false);
    ObjectSetInteger(m_chartId, objName, OBJPROP_HIDDEN, true);
    ObjectSetInteger(m_chartId, objName, OBJPROP_ZORDER, 0);
@@ -230,10 +253,11 @@ bool UIPanel::CreateHeader() {
 //| Tạo header title |
 //+------------------------------------------------------------------+
 bool UIPanel::CreateHeaderTitle() {
-   string objName = m_panelChildren[1].name;
+   string objName = m_panelHeaderTitle.name;
    if(!ObjectCreate(m_chartId, objName, OBJ_LABEL, 0, 0, 0))
       return false;
-
+   ObjectSetInteger(m_chartId, objName, OBJPROP_XDISTANCE, m_panelX + m_panelHeaderTitle.offsetX);
+   ObjectSetInteger(m_chartId, objName, OBJPROP_YDISTANCE, m_panelX + m_panelHeaderTitle.offsetY);
    ObjectSetInteger(m_chartId, objName, OBJPROP_CORNER, CORNER_LEFT_UPPER);
    ObjectSetInteger(m_chartId, objName, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
    ObjectSetString(m_chartId, objName, OBJPROP_TEXT, m_headerTitle);
@@ -241,8 +265,7 @@ bool UIPanel::CreateHeaderTitle() {
    ObjectSetInteger(m_chartId, objName, OBJPROP_FONTSIZE, 9);
    ObjectSetInteger(m_chartId, objName, OBJPROP_COLOR, m_headerTextColor);
    ObjectSetInteger(m_chartId, objName, OBJPROP_BACK, false);
-   ObjectSetInteger(m_chartId, objName, OBJPROP_SELECTABLE,
-                    true); // Cho phép click
+   ObjectSetInteger(m_chartId, objName, OBJPROP_SELECTABLE, true); // Cho phép click
    ObjectSetInteger(m_chartId, objName, OBJPROP_SELECTED, false);
    ObjectSetInteger(m_chartId, objName, OBJPROP_HIDDEN, true);
    ObjectSetInteger(m_chartId, objName, OBJPROP_ZORDER, 1);
@@ -254,10 +277,11 @@ bool UIPanel::CreateHeaderTitle() {
 //| Tạo nút header button min |
 //+------------------------------------------------------------------+
 bool UIPanel::CreateHeaderButtonMin() {
-   string objName = m_panelChildren[2].name;
+   string objName = m_panelHeaderBtnMin.name;
    if(!ObjectCreate(m_chartId, objName, OBJ_BUTTON, 0, 0, 0))
       return false;
-
+   ObjectSetInteger(m_chartId, objName, OBJPROP_XDISTANCE, m_panelX + m_panelHeaderBtnMin.offsetX);
+   ObjectSetInteger(m_chartId, objName, OBJPROP_YDISTANCE, m_panelX + m_panelHeaderBtnMin.offsetY);
    ObjectSetInteger(m_chartId, objName, OBJPROP_XSIZE, 20);
    ObjectSetInteger(m_chartId, objName, OBJPROP_YSIZE, 20);
    ObjectSetInteger(m_chartId, objName, OBJPROP_CORNER, CORNER_LEFT_UPPER);
@@ -265,10 +289,8 @@ bool UIPanel::CreateHeaderButtonMin() {
    ObjectSetString(m_chartId, objName, OBJPROP_FONT, "Arial Bold");
    ObjectSetInteger(m_chartId, objName, OBJPROP_FONTSIZE, 10);
    ObjectSetInteger(m_chartId, objName, OBJPROP_COLOR, clrWhite);
-   // clang-format off
-   ObjectSetInteger(m_chartId, objName, OBJPROP_BGCOLOR, C'60,60,60');
-   ObjectSetInteger(m_chartId, objName, OBJPROP_BORDER_COLOR, C'80,80,80');
-   // clang-format on
+   ObjectSetInteger(m_chartId, objName, OBJPROP_BGCOLOR, m_headerButtonBgColor);
+   ObjectSetInteger(m_chartId, objName, OBJPROP_BORDER_COLOR, m_headerButtonBorderColor);
    ObjectSetInteger(m_chartId, objName, OBJPROP_BACK, false);
    ObjectSetInteger(m_chartId, objName, OBJPROP_STATE, false);
    ObjectSetInteger(m_chartId, objName, OBJPROP_SELECTABLE, false);
@@ -280,10 +302,11 @@ bool UIPanel::CreateHeaderButtonMin() {
 }
 
 bool UIPanel::CreateHeaderButtonLock() {
-   string objName = m_panelChildren[3].name;
+   string objName = m_panelHeaderBtnLock.name;
    if(!ObjectCreate(m_chartId, objName, OBJ_BUTTON, 0, 0, 0))
       return false;
-
+   ObjectSetInteger(m_chartId, objName, OBJPROP_XDISTANCE, m_panelX + m_panelHeaderBtnLock.offsetX);
+   ObjectSetInteger(m_chartId, objName, OBJPROP_YDISTANCE, m_panelX + m_panelHeaderBtnLock.offsetY);
    ObjectSetInteger(m_chartId, objName, OBJPROP_XSIZE, 20);
    ObjectSetInteger(m_chartId, objName, OBJPROP_YSIZE, 20);
    ObjectSetInteger(m_chartId, objName, OBJPROP_CORNER, CORNER_LEFT_UPPER);
@@ -291,10 +314,43 @@ bool UIPanel::CreateHeaderButtonLock() {
    ObjectSetString(m_chartId, objName, OBJPROP_FONT, "Arial Bold");
    ObjectSetInteger(m_chartId, objName, OBJPROP_FONTSIZE, 6);
    ObjectSetInteger(m_chartId, objName, OBJPROP_COLOR, clrWhite);
-   // clang-format off
-   ObjectSetInteger(m_chartId, objName, OBJPROP_BGCOLOR, C'60,60,60');
-   ObjectSetInteger(m_chartId, objName, OBJPROP_BORDER_COLOR, C'80,80,80');
-   // clang-format on
+   ObjectSetInteger(m_chartId, objName, OBJPROP_BGCOLOR, m_headerButtonBgColor);
+   ObjectSetInteger(m_chartId, objName, OBJPROP_BORDER_COLOR, m_headerButtonBorderColor);
+   ObjectSetInteger(m_chartId, objName, OBJPROP_BACK, false);
+   ObjectSetInteger(m_chartId, objName, OBJPROP_STATE, false);
+   ObjectSetInteger(m_chartId, objName, OBJPROP_SELECTABLE, false);
+   ObjectSetInteger(m_chartId, objName, OBJPROP_SELECTED, false);
+   ObjectSetInteger(m_chartId, objName, OBJPROP_HIDDEN, true);
+   ObjectSetInteger(m_chartId, objName, OBJPROP_ZORDER, 1);
+
+   return true;
+}
+
+bool UIPanel::CreateHeaderButtonClose() {
+   string objName = m_panelHeaderBtnClose.name;
+   if(!ObjectCreate(m_chartId, objName, OBJ_BUTTON, 0, 0, 0))
+      return false;
+   ObjectSetInteger(
+      m_chartId,
+      objName,
+      OBJPROP_XDISTANCE,
+      m_panelX + m_panelHeaderBtnClose.offsetX
+   );
+   ObjectSetInteger(
+      m_chartId,
+      objName,
+      OBJPROP_YDISTANCE,
+      m_panelX + m_panelHeaderBtnClose.offsetY
+   );
+   ObjectSetInteger(m_chartId, objName, OBJPROP_XSIZE, 20);
+   ObjectSetInteger(m_chartId, objName, OBJPROP_YSIZE, 20);
+   ObjectSetInteger(m_chartId, objName, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+   ObjectSetString(m_chartId, objName, OBJPROP_TEXT, "×");
+   ObjectSetString(m_chartId, objName, OBJPROP_FONT, "Arial Bold");
+   ObjectSetInteger(m_chartId, objName, OBJPROP_FONTSIZE, 10);
+   ObjectSetInteger(m_chartId, objName, OBJPROP_COLOR, clrWhite);
+   ObjectSetInteger(m_chartId, objName, OBJPROP_BGCOLOR, m_headerButtonBgColor);
+   ObjectSetInteger(m_chartId, objName, OBJPROP_BORDER_COLOR, m_headerButtonBorderColor);
    ObjectSetInteger(m_chartId, objName, OBJPROP_BACK, false);
    ObjectSetInteger(m_chartId, objName, OBJPROP_STATE, false);
    ObjectSetInteger(m_chartId, objName, OBJPROP_SELECTABLE, false);
@@ -308,10 +364,21 @@ bool UIPanel::CreateHeaderButtonLock() {
 //| Tạo nền panel |
 //+------------------------------------------------------------------+
 bool UIPanel::CreateContentBackground() {
-   string objName = m_panelChildren[4].name;
+   string objName = m_panelContentBackground.name;
    if(!ObjectCreate(m_chartId, objName, OBJ_RECTANGLE_LABEL, 0, 0, 0))
       return false;
-
+   ObjectSetInteger(
+      m_chartId,
+      objName,
+      OBJPROP_XDISTANCE,
+      m_panelX + m_panelContentBackground.offsetX
+   );
+   ObjectSetInteger(
+      m_chartId,
+      objName,
+      OBJPROP_YDISTANCE,
+      m_panelX + m_panelContentBackground.offsetY
+   );
    ObjectSetInteger(m_chartId, objName, OBJPROP_XSIZE, m_width);
    ObjectSetInteger(m_chartId, objName, OBJPROP_YSIZE, m_height);
    ObjectSetInteger(m_chartId, objName, OBJPROP_BGCOLOR, m_contentBgColor);
@@ -333,19 +400,26 @@ bool UIPanel::CreateContentBackground() {
 //+------------------------------------------------------------------+
 void UIPanel::SetHeaderTitle(string title) {
    m_headerTitle = title;
-   ObjectSetString(m_chartId, m_panelChildren[1].name, OBJPROP_TEXT, title);
-   PanelRedrawChart();
+   ObjectSetString(m_chartId, m_panelHeaderTitle.name, OBJPROP_TEXT, title);
 }
 
 //+------------------------------------------------------------------+
 //| Thêm control vào danh sách |
 //+------------------------------------------------------------------+
 void UIPanel::AddPanelChild(string name, int offsetX, int offsetY) {
-   int size = ArraySize(m_panelChildren);
-   ArrayResize(m_panelChildren, size + 1);
-   m_panelChildren[size].name    = name;
-   m_panelChildren[size].offsetX = offsetX;
-   m_panelChildren[size].offsetY = offsetY;
+   int size = ArraySize(m_panelContents);
+   ArrayResize(m_panelContents, size + 1);
+   m_panelContents[size].name    = name;
+   m_panelContents[size].offsetX = offsetX;
+   m_panelContents[size].offsetY = offsetY;
+}
+
+void UIPanel::AddPanelChildName(string name) {
+   int size = ArraySize(m_panelContents);
+   ArrayResize(m_panelContents, size + 1);
+   m_panelContents[size].name    = name;
+   m_panelContents[size].offsetX = (int)ObjectGetInteger(m_chartId, name, OBJPROP_XDISTANCE);
+   m_panelContents[size].offsetY = (int)ObjectGetInteger(m_chartId, name, OBJPROP_YDISTANCE);
 }
 
 //+------------------------------------------------------------------+
@@ -355,18 +429,22 @@ bool UIPanel::OnChartEvent(
    const int id, const long &lparam, const double &dparam, const string &sparam
 ) {
    if(id == CHARTEVENT_OBJECT_CLICK) {
-      if(sparam == m_panelChildren[2].name) {
+      if(sparam == m_panelHeader.name || sparam == m_panelHeaderTitle.name) {
+         m_isClickHeader = true;
+         RefreshMoveStateUI();
+         return true;
+      }
+      if(sparam == m_panelHeaderBtnMin.name) {
          ToggleMinimize();
          return true;
       }
-      if(sparam == m_panelChildren[3].name) {
+      if(sparam == m_panelHeaderBtnLock.name) {
          m_isUnlockMove = !m_isUnlockMove;
-         RefreshMoveUI();
+         RefreshMoveStateUI();
          return true;
       }
-      if(sparam == m_panelChildren[0].name || sparam == m_panelChildren[1].name) {
-         m_isClickHeader = true;
-         RefreshMoveUI();
+      if(sparam == m_panelHeaderBtnClose.name) {
+         PanelDestroy();
          return true;
       }
    }
@@ -392,7 +470,7 @@ bool UIPanel::OnChartEvent(
             m_isDragging    = false;
             m_isClickHeader = false;
             EndDrag();
-            RefreshMoveUI();
+            RefreshMoveStateUI();
          }
       }
       return true;
@@ -408,18 +486,24 @@ void UIPanel::ToggleMinimize() {
    m_isMinimized = !m_isMinimized;
 
    if(m_isMinimized) {
-      ObjectSetString(m_chartId, m_panelChildren[2].name, OBJPROP_TEXT, "□");
-      ObjectSetInteger(m_chartId, m_panelChildren[2].name, OBJPROP_FONTSIZE, 12);
+      ObjectSetString(m_chartId, m_panelHeaderBtnMin.name, OBJPROP_TEXT, "□");
+      ObjectSetInteger(m_chartId, m_panelHeaderBtnMin.name, OBJPROP_FONTSIZE, 12);
    } else {
-      ObjectSetString(m_chartId, m_panelChildren[2].name, OBJPROP_TEXT, "−");
-      ObjectSetInteger(m_chartId, m_panelChildren[2].name, OBJPROP_FONTSIZE, 10);
+      ObjectSetString(m_chartId, m_panelHeaderBtnMin.name, OBJPROP_TEXT, "−");
+      ObjectSetInteger(m_chartId, m_panelHeaderBtnMin.name, OBJPROP_FONTSIZE, 10);
    }
 
    // Cập nhật hiển thị Content
-   for(int i = 4; i < ArraySize(m_panelChildren); i++) {
+   ObjectSetInteger(
+      m_chartId,
+      m_panelContentBackground.name,
+      OBJPROP_TIMEFRAMES,
+      !m_isMinimized ? OBJ_ALL_PERIODS : OBJ_NO_PERIODS
+   );
+   for(int i = 0; i < ArraySize(m_panelContents); i++) {
       ObjectSetInteger(
          m_chartId,
-         m_panelChildren[i].name,
+         m_panelContents[i].name,
          OBJPROP_TIMEFRAMES,
          !m_isMinimized ? OBJ_ALL_PERIODS : OBJ_NO_PERIODS
       );
@@ -428,17 +512,17 @@ void UIPanel::ToggleMinimize() {
    PanelRedrawChart();
 }
 
-void UIPanel::RefreshMoveUI() {
+void UIPanel::RefreshMoveStateUI() {
    if(m_isUnlockMove || m_isClickHeader) {
       ChartSetInteger(m_chartId, CHART_EVENT_MOUSE_MOVE, true);
-      ObjectSetString(m_chartId, m_panelChildren[3].name, OBJPROP_TEXT, "[□]");
-      ObjectSetInteger(m_chartId, m_panelChildren[4].name, OBJPROP_COLOR, clrWhite);
-      ObjectSetInteger(m_chartId, m_panelChildren[0].name, OBJPROP_COLOR, clrWhite);
+      ObjectSetInteger(m_chartId, m_panelHeader.name, OBJPROP_COLOR, clrWhite);
+      ObjectSetInteger(m_chartId, m_panelContentBackground.name, OBJPROP_COLOR, clrWhite);
+      ObjectSetString(m_chartId, m_panelHeaderBtnLock.name, OBJPROP_TEXT, "[□]");
    } else {
       ChartSetInteger(m_chartId, CHART_EVENT_MOUSE_MOVE, false);
-      ObjectSetString(m_chartId, m_panelChildren[3].name, OBJPROP_TEXT, "[■]");
-      ObjectSetInteger(m_chartId, m_panelChildren[4].name, OBJPROP_COLOR, m_borderColor);
-      ObjectSetInteger(m_chartId, m_panelChildren[0].name, OBJPROP_COLOR, m_borderColor);
+      ObjectSetInteger(m_chartId, m_panelHeader.name, OBJPROP_COLOR, m_borderColor);
+      ObjectSetInteger(m_chartId, m_panelContentBackground.name, OBJPROP_COLOR, m_borderColor);
+      ObjectSetString(m_chartId, m_panelHeaderBtnLock.name, OBJPROP_TEXT, "[■]");
    }
    PanelRedrawChart();
 }
@@ -475,23 +559,39 @@ void UIPanel::DoDrag(int x, int y) {
 //| Kết thúc kéo |
 //+------------------------------------------------------------------+
 void UIPanel::EndDrag() {
-   m_panelX = (int)ObjectGetInteger(m_chartId, m_panelChildren[0].name, OBJPROP_XDISTANCE);
-   m_panelY = (int)ObjectGetInteger(m_chartId, m_panelChildren[0].name, OBJPROP_YDISTANCE);
+   m_panelX = (int)ObjectGetInteger(m_chartId, m_panelHeader.name, OBJPROP_XDISTANCE);
+   m_panelY = (int)ObjectGetInteger(m_chartId, m_panelHeader.name, OBJPROP_YDISTANCE);
 }
 
 void UIPanel::PanelRefreshPosition(int _panelX, int _panelY) {
-   for(int i = 0; i < ArraySize(m_panelChildren); i++) {
+   for(int i = 0; i < ArraySize(m_panelControlls); i++) {
       ObjectSetInteger(
          m_chartId,
-         m_panelChildren[i].name,
+         m_panelControlls[i].name,
          OBJPROP_XDISTANCE,
-         _panelX + m_panelChildren[i].offsetX
+         _panelX + m_panelControlls[i].offsetX
       );
       ObjectSetInteger(
          m_chartId,
-         m_panelChildren[i].name,
+         m_panelControlls[i].name,
          OBJPROP_YDISTANCE,
-         _panelY + m_panelChildren[i].offsetY
+         _panelY + m_panelControlls[i].offsetY
+      );
+   }
+   for(int i = 0; i < ArraySize(m_panelContents); i++) {
+      ObjectSetInteger(
+         m_chartId,
+         m_panelContents[i].name,
+         OBJPROP_XDISTANCE,
+         _panelX + m_panelContents[i].offsetX
+      );
+      ObjectSetInteger(
+         m_chartId,
+         m_panelContents[i].name,
+         OBJPROP_YDISTANCE,
+         _panelY + m_panelContents[i].offsetY
       );
    }
 }
+
+#endif // UI_PANEL_MQH

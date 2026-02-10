@@ -123,6 +123,7 @@ bool CreateUIControls() {
    uiCommon.setTextColor(0, g_objBtnBuy, clrWhite);
    uiCommon.setBackgroundColor(0, g_objBtnBuy, C'0,128,0');
    uiCommon.setBorderColor(0, g_objBtnBuy,  C'0,180,0');
+   uiCommon.setZOrder(0, g_objBtnBuy, 100);
    // clang-format on
    uiPanel.AddPanelChild(g_objBtnBuy, 10, 60);
 
@@ -132,6 +133,7 @@ bool CreateUIControls() {
    uiCommon.setTextColor(0, g_objBtnSell, clrWhite);
    uiCommon.setBackgroundColor(0, g_objBtnSell, C'220,20,60');
    uiCommon.setBorderColor(0, g_objBtnSell,  C'255,60,100');
+      uiCommon.setZOrder(0, g_objBtnSell, 100);
    // clang-format on
    uiPanel.AddPanelChild(g_objBtnSell, 155, 60);
 
@@ -363,7 +365,16 @@ void ExcuteCloseAllPositions() {
    uiPanel.PanelRedrawChart();
 }
 
-int  count = 0;
 void ProcessOnMQLTester() {
-   // check state button
+   bool btnBuyState = uiCommon.getState(0, g_objBtnBuy);
+   Print("•>[DemoPanel.mq5:372]: btnBuyState: ", btnBuyState);
+   if(btnBuyState == true) {
+      /* code */
+      Print("•>[DemoPanel.mq5:375]: btnBuyState: ", btnBuyState);
+   }
+   bool btnSellState = uiCommon.getState(0, g_objBtnSell);
+   if(btnSellState == true) {
+      /* code */
+      Print("•>[DemoPanel.mq5:380]: btnSellState: ", btnSellState);
+   }
 }
