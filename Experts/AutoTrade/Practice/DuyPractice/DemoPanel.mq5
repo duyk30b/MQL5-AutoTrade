@@ -17,10 +17,8 @@ UICommon     uiCommon;
 input ulong  MagicNumber  = 20260206;
 input int    Slippage     = 5;
 input double InputLotSize = 0.1; // Lot size
-
 int          panelX       = 20;
 int          panelY       = 30;
-
 // Tên các objects
 string g_objPrice       = "Panel_Price";
 string g_objStatus      = "Panel_Status";
