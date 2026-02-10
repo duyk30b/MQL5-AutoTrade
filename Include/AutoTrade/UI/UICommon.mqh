@@ -1,6 +1,9 @@
 //+------------------------------------------------------------------+
 //|      UICommon.mqh  | | Thư viện tạo object trên chart            |
 //+------------------------------------------------------------------+
+#ifndef UI_COMMON_MQH
+#define UI_COMMON_MQH
+
 #property copyright "UICommon Library"
 #property link ""
 #property version "1.00"
@@ -75,6 +78,17 @@ class UICommon {
       return true;
    }
 
+   void CreateEdit(long chartId, string name, int w, int h, string txt, int fontSize = 12) {
+      ObjectCreate(chartId, name, OBJ_EDIT, 0, 0, 0);
+      ObjectSetInteger(chartId, name, OBJPROP_XSIZE, w);          // Chiều rộng
+      ObjectSetInteger(chartId, name, OBJPROP_YSIZE, h);          // Chiều cao
+      ObjectSetString(chartId, name, OBJPROP_TEXT, txt);          // Giá trị ban đầu
+      ObjectSetInteger(chartId, name, OBJPROP_COLOR, clrBlack);   // Màu chữ (đen)
+      ObjectSetInteger(chartId, name, OBJPROP_BGCOLOR, clrWhite); // Màu nền (trắng)
+      ObjectSetInteger(chartId, name, OBJPROP_FONTSIZE, fontSize);
+      ObjectSetInteger(chartId, name, OBJPROP_ZORDER, 20);        // Hiển thị phía trước
+   }
+
    void setPosition(long chartId, string name, int x, int y) {
       ObjectSetInteger(chartId, name, OBJPROP_XDISTANCE, x);
       ObjectSetInteger(chartId, name, OBJPROP_YDISTANCE, y);
@@ -104,7 +118,9 @@ class UICommon {
    void setZOrder(long chartId, string name, int zOrder) {
       ObjectSetInteger(chartId, name, OBJPROP_ZORDER, zOrder);
    }
-
+   void setTextAlign(long chartId, string name, ENUM_ALIGN_MODE alignMode) {
+      ObjectSetInteger(chartId, name, OBJPROP_ALIGN, alignMode);
+   }
    void setState(long chartId, string name, bool state) {
       ObjectSetInteger(chartId, name, OBJPROP_STATE, state);
    }
@@ -112,3 +128,4 @@ class UICommon {
       return (bool)ObjectGetInteger(chartId, name, OBJPROP_STATE);
    }
 };
+#endif // UI_COMMON_MQH

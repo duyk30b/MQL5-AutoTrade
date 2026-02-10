@@ -4,7 +4,7 @@ IndentWidth: 3
 UseTab: Never
 BreakBeforeBraces: Attach
 BreakBeforeBinaryOperators: All
-# AllowAllArgumentsOnNextLine: true
+IndentCaseLabels: true
 AlignConsecutiveAssignments:
   Enabled: true
   AcrossEmptyLines: true
@@ -51,5 +51,5 @@ KeepEmptyLines:
 ReferenceAlignment: Right
 AlwaysBreakAfterReturnType: None
 AlwaysBreakAfterDefinitionReturnType: None
-AllowShortFunctionsOnASingleLine: Inline  # thay vì false
-PenaltyReturnTypeOnItsOwnLine: 1000       # phạt nặng nếu xuống dòng sau return type
+AllowShortFunctionsOnASingleLine: Inline # thay vì false
+PenaltyReturnTypeOnItsOwnLine: 1000 # phạt nặng nếu xuống dòng sau return type

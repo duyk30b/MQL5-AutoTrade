@@ -125,6 +125,7 @@ bool CreateUIControls() {
    uiCommon.setTextColor(0, g_objBtnBuy, clrWhite);
    uiCommon.setBackgroundColor(0, g_objBtnBuy, C'0,128,0');
    uiCommon.setBorderColor(0, g_objBtnBuy,  C'0,180,0');
+   uiCommon.setZOrder(0, g_objBtnBuy, 100);
    // clang-format on
    uiPanel.AddPanelChild(g_objBtnBuy, 10, 60);
 
@@ -134,6 +135,7 @@ bool CreateUIControls() {
    uiCommon.setTextColor(0, g_objBtnSell, clrWhite);
    uiCommon.setBackgroundColor(0, g_objBtnSell, C'220,20,60');
    uiCommon.setBorderColor(0, g_objBtnSell,  C'255,60,100');
+      uiCommon.setZOrder(0, g_objBtnSell, 100);
    // clang-format on
    uiPanel.AddPanelChild(g_objBtnSell, 155, 60);
 
@@ -365,14 +367,16 @@ void ExcuteCloseAllPositions() {
    uiPanel.PanelRedrawChart();
 }
 
-int  count = 0;
 void ProcessOnMQLTester() {
-   // Đoạn này chỉ để test thôi
-   count++;
-   if(count == 10 || count == 20 || count == 30 || count == 40) {
-      cTrade.Buy(InputLotSize, _Symbol);
+   bool btnBuyState = uiCommon.getState(0, g_objBtnBuy);
+   Print("•>[DemoPanel.mq5:372]: btnBuyState: ", btnBuyState);
+   if(btnBuyState == true) {
+      /* code */
+      Print("•>[DemoPanel.mq5:375]: btnBuyState: ", btnBuyState);
    }
-   if(count == 15 || count == 2250 || count == 35 || count == 45) {
-      cTrade.Sell(InputLotSize, _Symbol);
+   bool btnSellState = uiCommon.getState(0, g_objBtnSell);
+   if(btnSellState == true) {
+      /* code */
+      Print("•>[DemoPanel.mq5:380]: btnSellState: ", btnSellState);
    }
 }
