@@ -8,15 +8,22 @@
 #property link "https://mql5.com"
 #property version "1.00"
 
+#include "TDPopupPosition.mqh"
+#include "TradeDashboardContainer.mqh"
 #include "TradeDashboardContext.mqh"
-#include "TradeDashboardPanel.mqh"
-#include "TradeDashboardTablePositions.mqh"
 
-input ulong                  MagicNumber = 20260206;
-input int                    Slippage    = 5;
+#include <AutoTrade/UI/UICommon.mqh>
+#include <Trade/Trade.mqh>
 
-TradeDashboardPanel          tradeDashboardPanel;
-TradeDashboardTablePositions tradeDashboardTablePositions;
+CTrade                  cTrade;
+UICommon                uiCommon;
+
+TradeDashboardContainer tradeDashboardContainer;
+TDPopupPosition         tdPopupPosition;
+
+input ulong             MagicNumber = 20260206;
+input int               Slippage    = 5;
+
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
@@ -26,16 +33,11 @@ int OnInit() {
    cTrade.SetExpertMagicNumber(MagicNumber);
    cTrade.SetDeviationInPoints(Slippage);
 
-   if(!tradeDashboardPanel.Create()) {
+   if(!tradeDashboardContainer.Create(20, 20, 500, 410)) {
       Print("Không thể tạo Panel!");
       return INIT_FAILED;
    }
-   Print("Khởi tạo Panel thành công!");
-   if(!tradeDashboardTablePositions.Create()) {
-      Print("Không thể tạo table!");
-      return INIT_FAILED;
-   }
-   Print("Khởi tạo Table thành công!");
+   tdPopupPosition.Create(520, 30, 300, 200, false);
 
    return (INIT_SUCCEEDED);
 }
@@ -53,38 +55,28 @@ void OnDeinit(const int reason) {
 //+------------------------------------------------------------------+
 
 void OnTick() {
-   tradeDashboardPanel.RefreshData();
-   if((bool)MQLInfoInteger(MQL_TESTER) && (bool)MQLInfoInteger(MQL_VISUAL_MODE)) {
-      ProcessOnMQLTester();
+   if(!(bool)MQLInfoInteger(MQL_TESTER)) {
+      tradeDashboardContainer.RefreshDataByTick();
+   } else {
+      if((bool)MQLInfoInteger(MQL_VISUAL_MODE)) {
+         tradeDashboardContainer.ProcessOnMQLTester();
+      }
    }
 }
 
 void OnTimer() {
-   tradeDashboardTablePositions.UpdateTicketPositionsData();
+   if(!(bool)MQLInfoInteger(MQL_TESTER)) {
+      tradeDashboardContainer.RefreshDataByTimer();
+   }
 }
 
 void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam) {
-   // Xử lý sự kiện của panel
-   tradeDashboardPanel.OnChartEvent(id, lparam, dparam, sparam);
-   tradeDashboardTablePositions.OnChartEvent(id, lparam, dparam, sparam);
+   tradeDashboardContainer.OnChartEvent(id, lparam, dparam, sparam);
+   tdPopupPosition.OnChartEvent(id, lparam, dparam, sparam);
+
 }
 
-void ProcessOnMQLTester() {
-   bool btnBuyState = uiCommon.getState(0, g_ObjBtnBuyName);
-   if(btnBuyState == true) {
-      tradeDashboardPanel.ExecuteBuy();
-      ObjectSetInteger(0, g_ObjBtnBuyName, OBJPROP_STATE, false);
-   }
-
-   bool btnSellState = uiCommon.getState(0, g_ObjBtnSellName);
-   if(btnSellState == true) {
-      tradeDashboardPanel.ExecuteSell();
-      ObjectSetInteger(0, g_ObjBtnSellName, OBJPROP_STATE, false);
-   }
-
-   bool btnCloseAllState = uiCommon.getState(0, g_ObjBtnCloseAllName);
-   if(btnCloseAllState == true) {
-      tradeDashboardPanel.ExcuteCloseAllPositions();
-      ObjectSetInteger(0, g_ObjBtnCloseAllName, OBJPROP_STATE, false);
-   }
+// Danh sách các hàm callback
+void openPopupModifyPosition(ulong ticketId) {
+   tdPopupPosition.openPopup(ticketId);
 }

@@ -1,21 +1,31 @@
+#include "TDTablePositions.mqh"
 #include "TradeDashboardContext.mqh"
 #include <AutoTrade/UI/UIPanel.mqh>
 
-UIPanel uiPanel;
+UIPanel          uiPanelContainer;
+TDTablePositions tdTablePositions;
 
-string  g_ObjStatusName      = "G_OBJ_STATUS_NAME";
-string  g_ObjBtnBuyName      = "G_OBJ_BTN_BUY_NAME";
-string  g_ObjBtnSellName     = "G_OBJ_BTN_SELL_NAME";
-string  g_ObjBtnCloseAllName = "G_OBJ_BTN_CLOSE_ALL_NAME";
-string  g_ObjLblVolumeName   = "G_OBJ_LABEL_VOLUME_NAME";
-string  g_ObjLblSlName       = "G_OBJ_LABEL_SL_NAME";
-string  g_ObjLblTpName       = "G_OBJ_LABEL_TP_NAME";
-string  g_ObjEdtVolumeName   = "G_OBJ_EDT_VOLUME_NAME";
-string  g_ObjEdtSlName       = "G_OBJ_EDT_SL_NAME";
-string  g_ObjEdtTpName       = "G_OBJ_EDT_TP_NAME";
+uint             lastUIUpdate         = 0;
 
-class TradeDashboardPanel {
+string           g_ObjInfomationName  = "G_OBJ_INFOMATION_NAME";
+string           g_ObjBtnBuyName      = "G_OBJ_BTN_BUY_NAME";
+string           g_ObjBtnSellName     = "G_OBJ_BTN_SELL_NAME";
+string           g_ObjBtnCloseAllName = "G_OBJ_BTN_CLOSE_ALL_NAME";
+string           g_ObjLblVolumeName   = "G_OBJ_LABEL_VOLUME_NAME";
+string           g_ObjLblSlName       = "G_OBJ_LABEL_SL_NAME";
+string           g_ObjLblTpName       = "G_OBJ_LABEL_TP_NAME";
+string           g_ObjEdtVolumeName   = "G_OBJ_EDT_VOLUME_NAME";
+string           g_ObjEdtSlName       = "G_OBJ_EDT_SL_NAME";
+string           g_ObjEdtTpName       = "G_OBJ_EDT_TP_NAME";
+string           g_ObjStatusName      = "G_OBJ_STATUS_NAME";
+
+class TradeDashboardContainer {
  public:
+   int    m_x;
+   int    m_y;
+   int    m_width;
+   int    m_height;
+
    color  clrBtnBuyBg;
    color  clrBtnBuyBorder;
    color  clrBtnSellBg;
@@ -25,7 +35,59 @@ class TradeDashboardPanel {
    double lotSizeDefault;
    int    slPointsDefault;
    int    tpPointsDefault;
-   bool   Create() {
+   bool   Create(int _x, int _y, int _width, int _height) {
+      m_x      = _x;
+      m_y      = _y;
+      m_width  = _width;
+      m_height = _height;
+
+      PanelContainerInitialization();
+      tdTablePositions.Initialization(m_x, m_y + uiPanelContainer.GetHeaderHeight() + 20, 6, 9);
+
+      PanelContainerStartDrawContainer();
+      tdTablePositions.StartDrawContent();
+
+      PanelContainerStartDrawContent();
+
+      string tableObjNameList[];
+      int    countObjName = tdTablePositions.GetObjectNameList(tableObjNameList);
+      for(int i = 0; i < countObjName; i++) {
+         AddObjectName(tableObjNameList[i]);
+      }
+
+      RefreshData();
+      return true;
+   }
+
+   virtual void onChangePage(int newPage) {
+      Print("•>[TradeDashboardContainer.mqh:63]: newPage: ", newPage);
+      RefreshData();
+   }
+
+   void RefreshDataByTimer() { tdTablePositions.RefreshTicketPositionsData(); }
+   void RefreshDataByTick() {
+      double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+      double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+
+      uiCommon.setText(0, g_ObjBtnBuyName, "BUY: " + DoubleToString(ask, _Digits));
+      uiCommon.setText(0, g_ObjBtnSellName, "SELL: " + DoubleToString(bid, _Digits));
+
+      uiPanelContainer.StartRedrawChart();
+   }
+
+   void RefreshData() {
+      tdTablePositions.RefreshTicketPositionsData();
+
+      double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+      double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+
+      uiCommon.setText(0, g_ObjBtnBuyName, "BUY: " + DoubleToString(ask, _Digits));
+      uiCommon.setText(0, g_ObjBtnSellName, "SELL: " + DoubleToString(bid, _Digits));
+
+      uiPanelContainer.StartRedrawChart();
+   }
+
+   bool PanelContainerInitialization() {
       // clang-format off
       clrBtnBuyBg        = C'0,128,0';       // Green
       clrBtnBuyBorder    = C'0,180,0';
@@ -39,87 +101,97 @@ class TradeDashboardPanel {
       slPointsDefault = 500;
       tpPointsDefault = 1000;
 
-      if(!uiPanel.Initialization(0, "TradingPanel", panelX, panelY, panelWidth, panelHeight)) {
-         Print("Không thể tạo panel!");
-         return false;
-      }
-      uiPanel.SetHeaderTitle("Trade Dashboard");
-      CreatePanelContent();
-      uiPanel.PanelRedrawChart();
+      uiPanelContainer.Initialization(0, "TradingPanel", m_x, m_y, m_width, m_height);
+      uiPanelContainer.SetHeaderTitle("Trade Dashboard");
       return true;
    }
 
-   bool CreatePanelContent() {
-      uiCommon.CreateLabel(0, g_ObjStatusName, "Chờ dữ liệu...", 8, clrLimeGreen);
-      uiPanel.AddPanelChild(g_ObjStatusName, 10, 40);
+   void PanelContainerStartDrawContainer() { uiPanelContainer.StartDrawContainer(); }
+
+   bool PanelContainerStartDrawContent() {
+      int yPos = uiPanelContainer.GetHeaderHeight();
+
+      uiCommon.CreateLabel(0, g_ObjInfomationName, "Thông báo: ...", 8, clrLimeGreen);
+      uiPanelContainer.AddPanelChild(g_ObjInfomationName, 10, yPos + 4);
+      yPos = yPos + 20;
+
+      // Thêm chiều cao của bảng
+      yPos = yPos + tdTablePositions.GetHeight() + 10;
 
       // Tạo ô nhập Lot Size
       uiCommon.CreateLabel(0, g_ObjLblVolumeName, "Lot Size:", 8, clrWhite);
-      uiPanel.AddPanelChild(g_ObjLblVolumeName, 10, 225);
+      uiPanelContainer.AddPanelChild(g_ObjLblVolumeName, 10, yPos);
       uiCommon.CreateEdit(
          0,
          g_ObjEdtVolumeName,
-         (panelWidth - 10) / 3 - 10,
+         (m_width - 10) / 3 - 10,
          22,
          DoubleToString(lotSizeDefault, 2)
       );
-      uiPanel.AddPanelChild(g_ObjEdtVolumeName, 10, 240);
+      uiPanelContainer.AddPanelChild(g_ObjEdtVolumeName, 10, yPos + 15);
 
       // Tạo ô nhập Stop Loss
-      uiCommon.CreateLabel(0, g_ObjLblSlName, "Stop Loss (SL):", 8, clrWhite);
-      uiPanel.AddPanelChild(g_ObjLblSlName, (panelWidth - 10) / 3 + 10, 225);
+      uiCommon.CreateLabel(0, g_ObjLblSlName, "Stop Loss (Points):", 8, clrWhite);
+      uiPanelContainer.AddPanelChild(g_ObjLblSlName, (m_width - 10) / 3 + 10, yPos);
       uiCommon.CreateEdit(
          0,
          g_ObjEdtSlName,
-         (panelWidth - 10) / 3 - 10,
+         (m_width - 10) / 3 - 10,
          22,
          IntegerToString(slPointsDefault)
       );
-      uiPanel.AddPanelChild(g_ObjEdtSlName, (panelWidth - 10) / 3 + 10, 240);
+      uiPanelContainer.AddPanelChild(g_ObjEdtSlName, (m_width - 10) / 3 + 10, yPos + 15);
 
       // Tạo ô nhập Take Profit
-      uiCommon.CreateLabel(0, g_ObjLblTpName, "Take Profit (TP):", 8, clrWhite);
-      uiPanel.AddPanelChild(g_ObjLblTpName, 2 * (panelWidth - 10) / 3 + 10, 225);
+      uiCommon.CreateLabel(0, g_ObjLblTpName, "Take Profit (Points):", 8, clrWhite);
+      uiPanelContainer.AddPanelChild(g_ObjLblTpName, 2 * (m_width - 10) / 3 + 10, yPos);
       uiCommon.CreateEdit(
          0,
          g_ObjEdtTpName,
-         (panelWidth - 10) / 3 - 10,
+         (m_width - 10) / 3 - 10,
          22,
          IntegerToString(tpPointsDefault)
       );
-      uiPanel.AddPanelChild(g_ObjEdtTpName, 2 * (panelWidth - 10) / 3 + 10, 240);
+      uiPanelContainer.AddPanelChild(g_ObjEdtTpName, 2 * (m_width - 10) / 3 + 10, yPos + 15);
+
+      yPos = yPos + 15 + 30;
 
       // Tạo nút BUY
-      uiCommon.CreateButton(0, g_ObjBtnBuyName, "BUY", panelWidth / 2 - 20, 35);
+      uiCommon.CreateButton(0, g_ObjBtnBuyName, "BUY", m_width / 2 - 20, 35);
       uiCommon.setTextColor(0, g_ObjBtnBuyName, clrWhite);
       uiCommon.setBackgroundColor(0, g_ObjBtnBuyName, clrBtnBuyBg);
       uiCommon.setBorderColor(0, g_ObjBtnBuyName, clrBtnBuyBorder);
       uiCommon.setZOrder(0, g_ObjBtnBuyName, 100);
-      uiPanel.AddPanelChild(g_ObjBtnBuyName, 10, 280);
+      uiPanelContainer.AddPanelChild(g_ObjBtnBuyName, 10, yPos);
 
       // Tạo nút SELL
-      uiCommon.CreateButton(0, g_ObjBtnSellName, "SELL", panelWidth / 2 - 20, 35);
+      uiCommon.CreateButton(0, g_ObjBtnSellName, "SELL", m_width / 2 - 20, 35);
       uiCommon.setTextColor(0, g_ObjBtnSellName, clrWhite);
       uiCommon.setBackgroundColor(0, g_ObjBtnSellName, clrBtnSellBg);
       uiCommon.setBorderColor(0, g_ObjBtnSellName, clrBtnSellBorder);
       uiCommon.setZOrder(0, g_ObjBtnSellName, 100);
-      uiPanel.AddPanelChild(g_ObjBtnSellName, panelWidth / 2 + 10, 280);
+      uiPanelContainer.AddPanelChild(g_ObjBtnSellName, m_width / 2 + 10, yPos);
+
+      yPos = yPos + 60;
 
       // Tạo nút Close All
-      uiCommon.CreateButton(0, g_ObjBtnCloseAllName, "Close All Position", panelWidth - 20, 35);
+      uiCommon.CreateButton(0, g_ObjBtnCloseAllName, "Close All Position", m_width - 20, 35);
       uiCommon.setTextColor(0, g_ObjBtnCloseAllName, clrWhite);
       uiCommon.setBackgroundColor(0, g_ObjBtnCloseAllName, clrBtnCloseAllBg); // Dark Orange
       uiCommon.setBorderColor(0, g_ObjBtnCloseAllName, clrBtnCloseAllBorder);
       uiCommon.setZOrder(0, g_ObjBtnCloseAllName, 100);
-      uiPanel.AddPanelChild(g_ObjBtnCloseAllName, 10, panelHeight - 40);
+      uiPanelContainer.AddPanelChild(g_ObjBtnCloseAllName, 10, yPos);
+      yPos = yPos + 40;
 
       // Tạo label hiển thị status
       uiCommon.CreateLabel(0, g_ObjStatusName, " ", 8, clrOrangeRed);
-      uiPanel.AddPanelChild(g_ObjStatusName, 10, panelHeight);
+      uiPanelContainer.AddPanelChild(g_ObjStatusName, 10, yPos);
 
-      uiPanel.PanelRefreshPosition(panelX, panelY);
+      uiPanelContainer.PanelRefreshPosition();
       return true;
    }
+
+   void AddObjectName(string objName) { uiPanelContainer.AddPanelChildName(objName); }
 
    void ExecuteBuy() {
       double ask      = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
@@ -182,20 +254,10 @@ class TradeDashboardPanel {
       ChartRedraw();
    }
 
-   void RefreshData() {
-      double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-      double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-
-      uiCommon.setText(0, g_ObjBtnBuyName, "BUY: " + DoubleToString(ask, _Digits));
-      uiCommon.setText(0, g_ObjBtnSellName, "SELL: " + DoubleToString(bid, _Digits));
-
-      uiPanel.PanelRedrawChart();
-   }
-
    void ExcuteCloseAllPositions() {
       uiCommon.setText(0, g_ObjStatusName, "Đang đóng tất cả lệnh...");
       uiCommon.setTextColor(0, g_ObjStatusName, clrOrange);
-      uiPanel.PanelRedrawChart();
+      uiPanelContainer.StartRedrawChart();
       int total  = PositionsTotal();
       int closed = 0;
 
@@ -209,11 +271,12 @@ class TradeDashboardPanel {
 
       uiCommon.setText(0, g_ObjStatusName, "Đã đóng " + IntegerToString(closed) + " lệnh");
       uiCommon.setTextColor(0, g_ObjStatusName, clrGreen);
-      uiPanel.PanelRedrawChart();
+      uiPanelContainer.StartRedrawChart();
    }
 
    bool OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam) {
-      uiPanel.OnChartEvent(id, lparam, dparam, sparam);
+      uiPanelContainer.OnChartEvent(id, lparam, dparam, sparam);
+      tdTablePositions.OnChartEvent(id, lparam, dparam, sparam);
 
       if(id == CHARTEVENT_OBJECT_CLICK) {
          // Xử lý click nút Buy
@@ -231,9 +294,40 @@ class TradeDashboardPanel {
             ExcuteCloseAllPositions();
             ObjectSetInteger(0, g_ObjBtnCloseAllName, OBJPROP_STATE, false);
          }
-         uiPanel.PanelRedrawChart();
+         uiPanelContainer.StartRedrawChart();
       }
 
       return true;
+   }
+
+   void ProcessOnMQLTester() {
+      if((GetTickCount() - lastUIUpdate) < 500) {
+         return;
+      }
+      lastUIUpdate = GetTickCount();
+
+      uiPanelContainer.ProcessOnMQLTester();
+      tdTablePositions.ProcessOnMQLTester();
+
+      RefreshData();
+      tdTablePositions.RefreshTicketPositionsData();
+
+      bool btnBuyState = uiCommon.getState(0, g_ObjBtnBuyName);
+      if(btnBuyState == true) {
+         ExecuteBuy();
+         ObjectSetInteger(0, g_ObjBtnBuyName, OBJPROP_STATE, false);
+      }
+
+      bool btnSellState = uiCommon.getState(0, g_ObjBtnSellName);
+      if(btnSellState == true) {
+         ExecuteSell();
+         ObjectSetInteger(0, g_ObjBtnSellName, OBJPROP_STATE, false);
+      }
+
+      bool btnCloseAllState = uiCommon.getState(0, g_ObjBtnCloseAllName);
+      if(btnCloseAllState == true) {
+         ExcuteCloseAllPositions();
+         ObjectSetInteger(0, g_ObjBtnCloseAllName, OBJPROP_STATE, false);
+      }
    }
 };

@@ -4,12 +4,9 @@
 #include <AutoTrade/UI/UICommon.mqh>
 #include <Trade/Trade.mqh>
 
-CTrade   cTrade;
-UICommon uiCommon;
+extern CTrade   cTrade;
+extern UICommon uiCommon;
 
-int      panelX      = 20;
-int      panelY      = 30;
-int      panelWidth  = 500;
-int      panelHeight = 400;
+void            openPopupModifyPosition(ulong ticketId);
 
 #endif // TRADE_DASHBOARD_CONTEXT_MQH

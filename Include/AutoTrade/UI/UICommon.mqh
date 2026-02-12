@@ -89,6 +89,13 @@ class UICommon {
       ObjectSetInteger(chartId, name, OBJPROP_ZORDER, 20);        // Hiển thị phía trước
    }
 
+   bool getState(long chartId, string name) {
+      return (bool)ObjectGetInteger(chartId, name, OBJPROP_STATE);
+   }
+   string getText(long chartId, string name) {
+      return ObjectGetString(chartId, name, OBJPROP_TEXT);
+   }
+
    void setPosition(long chartId, string name, int x, int y) {
       ObjectSetInteger(chartId, name, OBJPROP_XDISTANCE, x);
       ObjectSetInteger(chartId, name, OBJPROP_YDISTANCE, y);
@@ -124,8 +131,13 @@ class UICommon {
    void setState(long chartId, string name, bool state) {
       ObjectSetInteger(chartId, name, OBJPROP_STATE, state);
    }
-   bool getState(long chartId, string name) {
-      return (bool)ObjectGetInteger(chartId, name, OBJPROP_STATE);
+   void setShow(long chartId, string name, bool isShow) {
+      ObjectSetInteger(
+         chartId,
+         name,
+         OBJPROP_TIMEFRAMES,
+         isShow ? OBJ_ALL_PERIODS : OBJ_NO_PERIODS
+      );
    }
 };
 #endif // UI_COMMON_MQH
