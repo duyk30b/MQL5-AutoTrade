@@ -17,10 +17,8 @@ UICommon     uiCommon;
 input ulong  MagicNumber  = 20260206;
 input int    Slippage     = 5;
 input double InputLotSize = 0.1; // Lot size
-
 int          panelX       = 20;
 int          panelY       = 30;
-
 // Tên các objects
 string g_objPrice       = "Panel_Price";
 string g_objStatus      = "Panel_Status";
@@ -367,12 +365,5 @@ void ExcuteCloseAllPositions() {
 
 int  count = 0;
 void ProcessOnMQLTester() {
-   // Đoạn này chỉ để test thôi
-   count++;
-   if(count == 10 || count == 20 || count == 30 || count == 40) {
-      cTrade.Buy(InputLotSize, _Symbol);
-   }
-   if(count == 15 || count == 2250 || count == 35 || count == 45) {
-      cTrade.Sell(InputLotSize, _Symbol);
-   }
+   // check state button
 }
