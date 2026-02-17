@@ -13,36 +13,45 @@ struct ButtonInfo {
 };
 class TDTablePositions : public UITableListener {
  public:
+   long       m_chartId;
    int        m_x;
    int        m_y;
    int        m_rows;
    int        m_cols;
    int        m_page;
 
-   ButtonInfo g_buttons[]; // Store button info for event handling
-   color      clrBtnBg;
-   color      clrProfitPositive;
-   color      clrProfitNegative;
-   color      clrProfitNormal;
+   bool       m_isMinimized;
 
-   bool       Initialization(int _x, int _y, int _rows, int _cols) {
-      m_x    = _x;
-      m_y    = _y;
-      m_rows = _rows;
-      m_cols = _cols;
-      m_page = 1;
+   ButtonInfo g_buttons[];         // Store button info for event handling
+   color      clrBtnBg;
+   color      clrTextGreen;   // Green
+   color      clrTextRed;   // Red
+   color      clrTextOrange; // Orange
+
+   color      textColorBase;
+
+   bool       Initialization(long chartId, int _x, int _y, int _rows, int _cols) {
+      m_chartId     = chartId;
+      m_x           = _x;
+      m_y           = _y;
+      m_rows        = _rows;
+      m_cols        = _cols;
+      m_page        = 1;
+      m_isMinimized = false;
 
       // clang-format off
       if (InpTheme == THEME_DARK) {
          clrBtnBg          = C'70,130,180';
-         clrProfitPositive = C'50,205,50';  // Green
-         clrProfitNegative = C'255,80,80';  // Red
-         clrProfitNormal   = C'200,200,200';
+         clrTextGreen = C'50,205,50';  // Green
+         clrTextRed = C'255,80,80';  // Red
+         clrTextOrange = C'255,165,0'; // Orange
+         textColorBase   = C'200,200,200';
       } else if (InpTheme == THEME_LIGHT) {
          clrBtnBg          = C'30,144,255';
-         clrProfitPositive = C'0,150,0';     // Green
-         clrProfitNegative = C'200,0,0';     // Red
-         clrProfitNormal   = C'60,60,80';
+         clrTextGreen = C'0,150,0';     // Green
+         clrTextRed = C'200,0,0';     // Red
+         clrTextOrange = C'255,165,0'; // Orange
+         textColorBase   = C'60,60,80';
       }
       // clang-format on
 
@@ -75,6 +84,8 @@ class TDTablePositions : public UITableListener {
 
    int  GetObjectNameList(string &objNameList[]) { return uiTable.GetObjectNameList(objNameList); }
 
+   void SetIsMinimized(bool _isMinimized) { m_isMinimized = _isMinimized; }
+
    void RefreshTicketPositionsData() {
       int totalPositions = PositionsTotal();
       uiTable.setPagination(totalPositions, m_page);
@@ -98,6 +109,8 @@ class TDTablePositions : public UITableListener {
             uiTable.SetRowData(i, ticketId);
             string symbol = PositionGetString(POSITION_SYMBOL);
             int    digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
+            double volume = PositionGetDouble(POSITION_VOLUME);
+            double price  = PositionGetDouble(POSITION_PRICE_OPEN);
             double profit = PositionGetDouble(POSITION_PROFIT);
             double sl     = PositionGetDouble(POSITION_SL);
             double tp     = PositionGetDouble(POSITION_TP);
@@ -105,8 +118,8 @@ class TDTablePositions : public UITableListener {
             string rowData[9];
             rowData[0] = symbol;
             rowData[1] = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) ? "BUY" : "SELL";
-            rowData[2] = DoubleToString(PositionGetDouble(POSITION_VOLUME), 2);
-            rowData[3] = DoubleToString(PositionGetDouble(POSITION_PRICE_OPEN), digits);
+            rowData[2] = DoubleToString(volume, 2);
+            rowData[3] = DoubleToString(price, digits);
             rowData[4] = (sl > 0) ? DoubleToString(sl, digits) : "-";
             rowData[5] = (tp > 0) ? DoubleToString(tp, digits) : "-";
             rowData[6] = DoubleToString(profit, 4);
@@ -115,20 +128,35 @@ class TDTablePositions : public UITableListener {
                uiTable.SetCell(i, j, rowData[j], CELL_TYPE_TEXT);
             }
             uiTable.SetCell(i, 7, "Edit", CELL_TYPE_BUTTON);
-            uiCommon.setShow(0, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 7), true);
             uiTable.SetCell(i, 8, "Close", CELL_TYPE_BUTTON);
-            uiCommon.setShow(0, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 8), true);
+            if(!m_isMinimized) {
+               uiCommon.setShow(0, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 7), true);
+               uiCommon.setShow(0, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 8), true);
+            }
 
             // Set profit color
             color profitColor;
             if(profit > 0) {
-               profitColor = clrProfitPositive; // Green
+               profitColor = clrTextGreen; // Green
             } else if(profit < 0) {
-               profitColor = clrProfitNegative; // Red
+               profitColor = clrTextRed; // Red
             } else {
-               profitColor = clrProfitNormal;
+               profitColor = textColorBase;
             }
             uiTable.SetCellTextColor(i, 6, profitColor);
+
+            bool enableTrailingStop = false;
+            for(int i = 0; i < ArraySize(g_positionList); i++) {
+               if(g_positionList[i].ticket == ticketId) {
+                  enableTrailingStop = g_positionList[i].enableTrailingStop;
+                  break;
+               }
+            }
+            if(enableTrailingStop) {
+               uiTable.SetCellTextColor(i, 4, clrTextOrange); // Orange
+            } else {
+               uiTable.SetCellTextColor(i, 4, textColorBase);
+            }
 
          } else {
             uiTable.SetRowData(i, 0);
@@ -143,7 +171,7 @@ class TDTablePositions : public UITableListener {
       }
 
       // Draw table
-      uiTable.StartRedrawChart();
+      ChartRedraw(m_chartId);
    }
 
    void HandleClosePosition(ulong ticketId) {
@@ -188,8 +216,8 @@ class TDTablePositions : public UITableListener {
       return true;
    }
 
-   void ProcessOnMQLTester() {
-      uiTable.ProcessOnMQLTester();
+   void OnMQLTesterEvent() {
+      uiTable.OnMQLTesterEvent();
       for(int i = 0; i < m_rows; i++) {
          bool isEmptyRow = (uiTable.GetRowData(i) == 0);
          if(isEmptyRow)

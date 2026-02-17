@@ -5,9 +5,9 @@
 #ifndef UI_TABLE_MQH
 #define UI_TABLE_MQH
 
-#property copyright "Copyright 2026"
+#property copyright "UITable Library"
 #property link ""
-#property version "3.00"
+#property version "1.00"
 #property strict
 
 //+------------------------------------------------------------------+
@@ -52,11 +52,6 @@ struct TableHeader {
    string         headerText;
    int            width;
    ENUM_CELL_TYPE cellType;
-};
-
-class UITableInterface {
- public:
-   virtual void selectPage(int _page) = 0;
 };
 
 class UITableListener {
@@ -125,6 +120,8 @@ class UITable {
    UITable() {};
    ~UITable() { TableDestroy(); };
 
+   void SetListener(UITableListener *listener) { m_listener = listener; };
+
    // Khởi tạo panel
    void Initialization(long chartId, string name, int x, int y, int rows, int cols) {
       m_chartId      = chartId;
@@ -183,17 +180,8 @@ class UITable {
 
       ChartSetInteger(m_chartId, CHART_EVENT_MOUSE_MOVE, true);
    };
-   void   TableDestroy();
-
-   void   SetListener(UITableListener *listener) { m_listener = listener; };
-
-   string GetObjectName(ENUM_TABLE_OBJECT_TYPE tableObjectType, int row = 0, int col = 0);
-   string GetObjectNamePrefix(ENUM_TABLE_OBJECT_TYPE tableObjectType);
-   int    GetObjectNameList(string &objNameList[]);
-   void   GetCellPositionByObjectName(
-        ENUM_TABLE_OBJECT_TYPE tableObjectType, string objectName, int &row, int &col
-     );
-   int GetWidth() {
+   void TableDestroy();
+   int  GetWidth() {
       int with = 0;
       for(int i = 0; i < ArraySize(m_tableHeader); i++) {
          with += m_tableHeader[i].width;
@@ -204,6 +192,150 @@ class UITable {
       int height = m_headerHeight + (ArraySize(m_tableRows) * m_rowHeight) + 30;
       return height;
    };
+   ENUM_CELL_TYPE GetCellType(int row, int col) { return m_tableRows[row].cells[col].cellType; };
+   string         GetObjectName(ENUM_TABLE_OBJECT_TYPE tableObjectType, int row = 0, int col = 0) {
+      string prefix = GetObjectNamePrefix(tableObjectType);
+      switch(tableObjectType) {
+         case OBJ_HEADER_BG: {
+            return prefix + "_" + IntegerToString(col);
+         };
+         case OBJ_HEADER_TEXT: {
+            return prefix + "_" + IntegerToString(col);
+         };
+         case OBJ_CELL_BG: {
+            return prefix + "_" + IntegerToString(row) + "_" + IntegerToString(col);
+         }
+         case OBJ_CELL_CONTENT: {
+            return prefix + "_" + IntegerToString(row) + "_" + IntegerToString(col);
+         }
+         default: return prefix;
+      }
+   };
+   string GetObjectNamePrefix(ENUM_TABLE_OBJECT_TYPE tableObjectType) {
+      switch(tableObjectType) {
+         case OBJ_HEADER_BG: {
+            return m_name + "_" + "headerBg";
+         };
+         case OBJ_HEADER_TEXT: {
+            return m_name + "_" + "headerText";
+         };
+         case OBJ_CELL_BG: {
+            return m_name + "_" + "cellBg";
+         }
+         case OBJ_CELL_CONTENT: {
+            return m_name + "_" + "cellContent";
+         }
+         case OBJ_PAGINATION_TOTAL: {
+            return m_name + "_" + "paginationTotal";
+         }
+         case OBJ_PAGINATION_PREVIOUS_PAGE: {
+            return m_name + "_" + "paginationPrevPage";
+         }
+         case OBJ_PAGINATION_PAGE: {
+            return m_name + "_" + "paginationPage";
+         }
+         case OBJ_PAGINATION_NEXT_PAGE: {
+            return m_name + "_" + "paginationNextPage";
+         }
+
+         default: return "unknown";
+      }
+   };
+   int GetObjectNameList(string &objNameList[]) {
+      int rowsCount = ArraySize(m_tableRows);
+      int colsCount = ArraySize(m_tableHeader);
+      int objCount  = (rowsCount + 1) * colsCount * 2 + 4; // Cells + Headers + Background
+      ArrayResize(objNameList, objCount);
+      int index = 0;
+      // Headers
+      for(int col = 0; col < colsCount; col++) {
+         objNameList[index++] = GetObjectName(OBJ_HEADER_BG, 0, col);
+         objNameList[index++] = GetObjectName(OBJ_HEADER_TEXT, 0, col);
+      }
+      // Cells
+      for(int row = 0; row < rowsCount; row++) {
+         for(int col = 0; col < colsCount; col++) {
+            objNameList[index++] = GetObjectName(OBJ_CELL_BG, row, col);
+            objNameList[index++] = GetObjectName(OBJ_CELL_CONTENT, row, col);
+         }
+      }
+      objNameList[index++] = GetObjectName(OBJ_PAGINATION_TOTAL, 0, 0);
+      objNameList[index++] = GetObjectName(OBJ_PAGINATION_PREVIOUS_PAGE, 0, 0);
+      objNameList[index++] = GetObjectName(OBJ_PAGINATION_PAGE, 0, 0);
+      objNameList[index++] = GetObjectName(OBJ_PAGINATION_NEXT_PAGE, 0, 0);
+      return objCount;
+   };
+   void GetCellPositionByObjectName(
+      ENUM_TABLE_OBJECT_TYPE tableObjectType, string objectName, int &row, int &col
+   ) {
+      string parts[];
+      int    count = StringSplit(objectName, '_', parts);
+
+      switch(tableObjectType) {
+         case OBJ_HEADER_BG: {
+            col = (int)StringToInteger(parts[2]);
+         };
+         case OBJ_HEADER_TEXT: {
+            col = (int)StringToInteger(parts[2]);
+         };
+         case OBJ_CELL_BG: {
+            row = (int)StringToInteger(parts[2]);
+            col = (int)StringToInteger(parts[3]);
+         }
+         case OBJ_CELL_CONTENT: {
+            row = (int)StringToInteger(parts[2]);
+            col = (int)StringToInteger(parts[3]);
+         }
+      }
+   };
+   void GetCellPosition(int row, int col, int &x, int &y, int &width, int &height) {
+      if(row < 0 || row >= ArraySize(m_tableRows) || col < 0 || col >= ArraySize(m_tableHeader))
+         return;
+
+      x = m_x;
+      for(int i = 0; i < col; i++) {
+         x += m_tableHeader[i].width;
+      }
+
+      y      = m_y + m_headerHeight + (row * m_rowHeight);
+      width  = m_tableHeader[col].width;
+      height = m_rowHeight;
+   };
+   int GetRowAtPosition(int x, int y) {
+      int colsCount  = ArraySize(m_tableHeader);
+      int rowsCount  = ArraySize(m_tableRows);
+
+      int totalWidth = 0;
+      for(int i = 0; i < colsCount; i++) {
+         totalWidth += m_tableHeader[i].width;
+      }
+
+      int tableTop    = m_y + m_headerHeight;
+      int tableBottom = tableTop + (rowsCount * m_rowHeight);
+
+      if(x >= m_x && x <= m_x + totalWidth && y >= tableTop && y < tableBottom) {
+         return (y - tableTop) / m_rowHeight;
+      }
+
+      return -1;
+   };
+   int GetColumnAtPosition(int x, int y) {
+      int colsCount = ArraySize(m_tableHeader);
+
+      int xOffset   = m_x;
+
+      for(int col = 0; col < colsCount; col++) {
+         if(x >= xOffset && x < xOffset + m_tableHeader[col].width) {
+            return col;
+         }
+         xOffset += m_tableHeader[col].width;
+      }
+
+      return -1;
+   };
+   string GetCellObjectPrefix(int row, int col) {
+      return m_name + "_custom_" + IntegerToString(row) + "_" + IntegerToString(col);
+   }
 
    void SetTheme(ENUM_TABLE_THEME theme) { m_currentTheme = theme; }
    void SetZOrderBase(int zOrderBase) { m_zOrderBase = zOrderBase; };
@@ -213,39 +345,18 @@ class UITable {
       m_fontName = fontName;
       m_fontSize = fontSize;
    };
+   void SetTextColorBase(color textColorBase) { m_textColorBase = textColorBase; }
 
-   // Theme color setters
-   void SetThemeColors(
-      color textColorBase,
-      color headerTextColor,
-      color headerBgColor,
-      color contentBtnBgColor,
-      color cellBorderColor,
-      color rowBgColorOdd,
-      color rowBgColorEven,
-      color rowBgColorHover,
-      color paginationBtnBgColor,
-      color paginationBtnBorderColor
-   ) {
-      m_textColorBase            = textColorBase;
-      m_headerTextColor          = headerTextColor;
-      m_headerBgColor            = headerBgColor;
-      m_contentBtnBgColor        = contentBtnBgColor;
-      m_cellBorderColor          = cellBorderColor;
-      m_rowBgColorOdd            = rowBgColorOdd;
-      m_rowBgColorEven           = rowBgColorEven;
-      m_rowBgColorHover          = rowBgColorHover;
-      m_paginationBtnBgColor     = paginationBtnBgColor;
-      m_paginationBtnBorderColor = paginationBtnBorderColor;
-   };
-
-   // Column management
    void ClearAllText();
 
    // Data management
    void SetHeader(
       int columnIndex, string headerText, int width, ENUM_CELL_TYPE cellType = CELL_TYPE_TEXT
-   );
+   ) {
+      m_tableHeader[columnIndex].headerText = headerText;
+      m_tableHeader[columnIndex].width      = width;
+      m_tableHeader[columnIndex].cellType   = cellType;
+   };
    void setPagination(int _total, int _page) {
       m_total          = _total;
       m_page           = _page;
@@ -262,184 +373,33 @@ class UITable {
    };
    ulong GetRowData(int row) { return m_tableRows[row].data; };
    void  SetRowData(int row, ulong data) { m_tableRows[row].data = data; };
-   void  SetCell(int row, int col, string text, ENUM_CELL_TYPE cellType);
-   void  SetCellTextColor(int row, int col, color textColor = clrNONE);
 
-   // Drawing methods
-   void StartDrawContent() {
-      CreateHeaders();
-      CreateCells();
-      CreatePagination();
-      StartRedrawChart();
+   void  SetCell(int row, int col, string text, ENUM_CELL_TYPE cellType) {
+      m_tableRows[row].cells[col].text     = text;
+      m_tableRows[row].cells[col].cellType = cellType;
+      string cellTextName                  = GetObjectName(OBJ_CELL_CONTENT, row, col);
+      ObjectSetString(m_chartId, cellTextName, OBJPROP_TEXT, text);
    };
+   void SetCellTextColor(int row, int col, color textColor = clrNONE) {
+      string cellTextName = GetObjectName(OBJ_CELL_CONTENT, row, col);
+      if(textColor != clrNONE) {
+         ObjectSetInteger(m_chartId, cellTextName, OBJPROP_COLOR, textColor);
+      }
+   };
+
    void StartRedrawChart() { ChartRedraw(m_chartId); };
-
-   // Getters
-   ENUM_CELL_TYPE GetCellType(int row, int col) { return m_tableRows[row].cells[col].cellType; };
-   bool           GetCellPosition(int row, int col, int &x, int &y, int &width, int &height);
-   int            GetRowAtPosition(int x, int y);
-   int            GetColumnAtPosition(int x, int y);
-   string         GetCellObjectPrefix(int row, int col); // For EA to create custom objects
-
-   void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam) {
-      if(id == CHARTEVENT_MOUSE_MOVE) {
-         int x   = (int)lparam;
-         int y   = (int)dparam;
-         int row = GetRowAtPosition(x, y);
-
-         if(m_hoverRow != row) {
-            int oldHoverRow = m_hoverRow;
-            m_hoverRow      = row;
-
-            if(oldHoverRow >= 0) {
-               UpdateRowColors(oldHoverRow);
-            }
-            if(m_hoverRow >= 0) {
-               UpdateRowColors(m_hoverRow);
-            }
-         }
-         StartRedrawChart();
-      }
-      if(id == CHARTEVENT_OBJECT_CLICK) {
-         if(sparam == GetObjectName(OBJ_PAGINATION_PREVIOUS_PAGE)) {
-            ObjectSetInteger(0, GetObjectName(OBJ_PAGINATION_PREVIOUS_PAGE), OBJPROP_STATE, false);
-            if(m_page > 1) {
-               m_listener.onPageChange(m_page - 1);
-            }
-         }
-         if(sparam == GetObjectName(OBJ_PAGINATION_NEXT_PAGE)) {
-            ObjectSetInteger(0, GetObjectName(OBJ_PAGINATION_NEXT_PAGE), OBJPROP_STATE, false);
-            if(m_page < m_pageTotal) {
-               m_listener.onPageChange(m_page + 1);
-            }
-         }
-      }
-   }
-
-   void ProcessOnMQLTester() {
-      bool btnPreviousState
-         = ObjectGetInteger(m_chartId, GetObjectName(OBJ_PAGINATION_PREVIOUS_PAGE), OBJPROP_STATE);
-      if(btnPreviousState) {
-         ObjectSetInteger(0, GetObjectName(OBJ_PAGINATION_PREVIOUS_PAGE), OBJPROP_STATE, false);
-         if(m_page > 1) {
-            m_listener.onPageChange(m_page - 1);
-         }
-      }
-
-      bool btnNextState
-         = ObjectGetInteger(m_chartId, GetObjectName(OBJ_PAGINATION_NEXT_PAGE), OBJPROP_STATE);
-      if(btnNextState) {
-         ObjectSetInteger(0, GetObjectName(OBJ_PAGINATION_NEXT_PAGE), OBJPROP_STATE, false);
-         if(m_page < m_pageTotal) {
-            m_listener.onPageChange(m_page + 1);
-         }
-      }
-   };
+   void StartDrawContent();
+   void HandleClickBtnPaginationPrevious();
+   void HandleClickBtnPaginationNext();
+   void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
+   void OnMQLTesterEvent();
 };
 
-string UITable::GetObjectNamePrefix(ENUM_TABLE_OBJECT_TYPE tableObjectType) {
-   switch(tableObjectType) {
-      case OBJ_HEADER_BG: {
-         return m_name + "_" + "headerBg";
-      };
-      case OBJ_HEADER_TEXT: {
-         return m_name + "_" + "headerText";
-      };
-      case OBJ_CELL_BG: {
-         return m_name + "_" + "cellBg";
-      }
-      case OBJ_CELL_CONTENT: {
-         return m_name + "_" + "cellContent";
-      }
-      case OBJ_PAGINATION_TOTAL: {
-         return m_name + "_" + "paginationTotal";
-      }
-      case OBJ_PAGINATION_PREVIOUS_PAGE: {
-         return m_name + "_" + "paginationPrevPage";
-      }
-      case OBJ_PAGINATION_PAGE: {
-         return m_name + "_" + "paginationPage";
-      }
-      case OBJ_PAGINATION_NEXT_PAGE: {
-         return m_name + "_" + "paginationNextPage";
-      }
-
-      default: return "unknown";
-   }
-};
-
-int UITable::GetObjectNameList(string &objNameList[]) {
-   int rowsCount = ArraySize(m_tableRows);
-   int colsCount = ArraySize(m_tableHeader);
-   int objCount  = (rowsCount + 1) * colsCount * 2 + 4; // Cells + Headers + Background
-   ArrayResize(objNameList, objCount);
-   int index = 0;
-   // Headers
-   for(int col = 0; col < colsCount; col++) {
-      objNameList[index++] = GetObjectName(OBJ_HEADER_BG, 0, col);
-      objNameList[index++] = GetObjectName(OBJ_HEADER_TEXT, 0, col);
-   }
-   // Cells
-   for(int row = 0; row < rowsCount; row++) {
-      for(int col = 0; col < colsCount; col++) {
-         objNameList[index++] = GetObjectName(OBJ_CELL_BG, row, col);
-         objNameList[index++] = GetObjectName(OBJ_CELL_CONTENT, row, col);
-      }
-   }
-   objNameList[index++] = GetObjectName(OBJ_PAGINATION_TOTAL, 0, 0);
-   objNameList[index++] = GetObjectName(OBJ_PAGINATION_PREVIOUS_PAGE, 0, 0);
-   objNameList[index++] = GetObjectName(OBJ_PAGINATION_PAGE, 0, 0);
-   objNameList[index++] = GetObjectName(OBJ_PAGINATION_NEXT_PAGE, 0, 0);
-   return objCount;
-};
-
-string UITable::GetObjectName(ENUM_TABLE_OBJECT_TYPE tableObjectType, int row = 0, int col = 0) {
-   string prefix = GetObjectNamePrefix(tableObjectType);
-   switch(tableObjectType) {
-      case OBJ_HEADER_BG: {
-         return prefix + "_" + IntegerToString(col);
-      };
-      case OBJ_HEADER_TEXT: {
-         return prefix + "_" + IntegerToString(col);
-      };
-      case OBJ_CELL_BG: {
-         return prefix + "_" + IntegerToString(row) + "_" + IntegerToString(col);
-      }
-      case OBJ_CELL_CONTENT: {
-         return prefix + "_" + IntegerToString(row) + "_" + IntegerToString(col);
-      }
-      default: return prefix;
-   }
-};
-
-void UITable::GetCellPositionByObjectName(
-   ENUM_TABLE_OBJECT_TYPE tableObjectType, string objectName, int &row, int &col
-) {
-   string parts[];
-   int    count = StringSplit(objectName, '_', parts);
-
-   switch(tableObjectType) {
-      case OBJ_HEADER_BG: {
-         col = (int)StringToInteger(parts[2]);
-      };
-      case OBJ_HEADER_TEXT: {
-         col = (int)StringToInteger(parts[2]);
-      };
-      case OBJ_CELL_BG: {
-         row = (int)StringToInteger(parts[2]);
-         col = (int)StringToInteger(parts[3]);
-      }
-      case OBJ_CELL_CONTENT: {
-         row = (int)StringToInteger(parts[2]);
-         col = (int)StringToInteger(parts[3]);
-      }
-   }
-}
-
-void UITable::SetHeader(int columnIndex, string headerText, int width, ENUM_CELL_TYPE cellType) {
-   m_tableHeader[columnIndex].headerText = headerText;
-   m_tableHeader[columnIndex].width      = width;
-   m_tableHeader[columnIndex].cellType   = cellType;
+void UITable::StartDrawContent() {
+   CreateHeaders();
+   CreateCells();
+   CreatePagination();
+   StartRedrawChart();
 }
 
 //+------------------------------------------------------------------+
@@ -712,86 +672,6 @@ void UITable::ClearAllText() {
    }
 }
 
-void UITable::SetCell(int row, int col, string text, ENUM_CELL_TYPE cellType) {
-   m_tableRows[row].cells[col].text     = text;
-   m_tableRows[row].cells[col].cellType = cellType;
-   string cellTextName                  = GetObjectName(OBJ_CELL_CONTENT, row, col);
-   ObjectSetString(m_chartId, cellTextName, OBJPROP_TEXT, text);
-}
-
-void UITable::SetCellTextColor(int row, int col, color textColor = clrNONE) {
-   string cellTextName = GetObjectName(OBJ_CELL_CONTENT, row, col);
-   if(textColor != clrNONE) {
-      ObjectSetInteger(m_chartId, cellTextName, OBJPROP_COLOR, textColor);
-   }
-}
-
-//+------------------------------------------------------------------+
-//| Get cell position - for EA to create custom objects              |
-//+------------------------------------------------------------------+
-bool UITable::GetCellPosition(int row, int col, int &x, int &y, int &width, int &height) {
-   if(row < 0 || row >= ArraySize(m_tableRows) || col < 0 || col >= ArraySize(m_tableHeader))
-      return false;
-
-   x = m_x;
-   for(int i = 0; i < col; i++) {
-      x += m_tableHeader[i].width;
-   }
-
-   y      = m_y + m_headerHeight + (row * m_rowHeight);
-   width  = m_tableHeader[col].width;
-   height = m_rowHeight;
-
-   return true;
-}
-
-//+------------------------------------------------------------------+
-//| Get row at mouse position                                        |
-//+------------------------------------------------------------------+
-int UITable::GetRowAtPosition(int x, int y) {
-   int colsCount  = ArraySize(m_tableHeader);
-   int rowsCount  = ArraySize(m_tableRows);
-
-   int totalWidth = 0;
-   for(int i = 0; i < colsCount; i++) {
-      totalWidth += m_tableHeader[i].width;
-   }
-
-   int tableTop    = m_y + m_headerHeight;
-   int tableBottom = tableTop + (rowsCount * m_rowHeight);
-
-   if(x >= m_x && x <= m_x + totalWidth && y >= tableTop && y < tableBottom) {
-      return (y - tableTop) / m_rowHeight;
-   }
-
-   return -1;
-}
-
-//+------------------------------------------------------------------+
-//| Get column at mouse position                                     |
-//+------------------------------------------------------------------+
-int UITable::GetColumnAtPosition(int x, int y) {
-   int colsCount = ArraySize(m_tableHeader);
-
-   int xOffset   = m_x;
-
-   for(int col = 0; col < colsCount; col++) {
-      if(x >= xOffset && x < xOffset + m_tableHeader[col].width) {
-         return col;
-      }
-      xOffset += m_tableHeader[col].width;
-   }
-
-   return -1;
-}
-
-//+------------------------------------------------------------------+
-//| Get cell object prefix for EA to create custom objects           |
-//+------------------------------------------------------------------+
-string UITable::GetCellObjectPrefix(int row, int col) {
-   return m_name + "_custom_" + IntegerToString(row) + "_" + IntegerToString(col);
-}
-
 //+------------------------------------------------------------------+
 //| Delete all table objects                                         |
 //+------------------------------------------------------------------+
@@ -813,5 +693,67 @@ void UITable::TableDestroy() {
    }
    StartRedrawChart();
 }
+
+void UITable::HandleClickBtnPaginationPrevious() {
+   ObjectSetInteger(0, GetObjectName(OBJ_PAGINATION_PREVIOUS_PAGE), OBJPROP_STATE, false);
+   if(m_page > 1) {
+      if(m_listener != NULL) {
+         m_listener.onPageChange(m_page - 1);
+      }
+   }
+};
+void UITable::HandleClickBtnPaginationNext() {
+   ObjectSetInteger(0, GetObjectName(OBJ_PAGINATION_NEXT_PAGE), OBJPROP_STATE, false);
+   if(m_page < m_pageTotal) {
+      if(m_listener != NULL) {
+         m_listener.onPageChange(m_page + 1);
+      }
+   }
+};
+
+void UITable::OnChartEvent(
+   const int id, const long &lparam, const double &dparam, const string &sparam
+) {
+   if(id == CHARTEVENT_MOUSE_MOVE) {
+      int x   = (int)lparam;
+      int y   = (int)dparam;
+      int row = GetRowAtPosition(x, y);
+
+      if(m_hoverRow != row) {
+         int oldHoverRow = m_hoverRow;
+         m_hoverRow      = row;
+
+         if(oldHoverRow >= 0) {
+            UpdateRowColors(oldHoverRow);
+         }
+         if(m_hoverRow >= 0) {
+            UpdateRowColors(m_hoverRow);
+         }
+      }
+      StartRedrawChart();
+   }
+   if(id == CHARTEVENT_OBJECT_CLICK) {
+      if(sparam == GetObjectName(OBJ_PAGINATION_PREVIOUS_PAGE)) {
+         HandleClickBtnPaginationPrevious();
+      }
+      if(sparam == GetObjectName(OBJ_PAGINATION_NEXT_PAGE)) {
+         HandleClickBtnPaginationNext();
+      }
+   }
+};
+
+void UITable::OnMQLTesterEvent() {
+   bool btnPreviousState
+      = ObjectGetInteger(m_chartId, GetObjectName(OBJ_PAGINATION_PREVIOUS_PAGE), OBJPROP_STATE);
+   if(btnPreviousState) {
+      HandleClickBtnPaginationPrevious();
+   }
+
+   bool btnNextState
+      = ObjectGetInteger(m_chartId, GetObjectName(OBJ_PAGINATION_NEXT_PAGE), OBJPROP_STATE);
+   if(btnNextState) {
+      HandleClickBtnPaginationNext();
+   }
+};
 
 #endif // UI_TABLE_MQH
