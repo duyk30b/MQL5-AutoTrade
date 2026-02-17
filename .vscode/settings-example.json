@@ -43,5 +43,98 @@
     "[òóọỏõôồốộổỗơờớợởỡ]",
     "[ùúụủũưừứựửữ]",
     "[ỳýỵỷỹđ]"
+  ],
+  "codemap.mq5": [
+    {
+      "pattern": "^\\s*class\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "clear": "{",
+      "role": "class",
+      "icon": "symbol-class"
+    },
+    {
+      "pattern": "^\\s*struct\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "clear": "{",
+      "role": "struct",
+      "icon": "symbol-struct"
+    },
+    {
+      "pattern": "^\\s*enum\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "clear": "{",
+      "role": "enum",
+      "icon": "symbol-enum"
+    },
+    {
+      "pattern": "^\\s*(?:void|int|double|bool|string|long|datetime|color|uchar|uint|short|char|float)\\s+(?:[A-Za-z_][A-Za-z0-9_]*::)?([A-Za-z_][A-Za-z0-9_]*)\\s*\\([^;]*\\)\\s*(?!;)",
+      "clear": "{",
+      "suffix": "",
+      "role": "function",
+      "icon": "symbol-method"
+    },
+    {
+      "pattern": "^\\s*(?:void|int|double|bool|string|long|datetime|color|uchar|uint|short|char|float)\\s+(?:[A-Za-z_][A-Za-z0-9_]*::)?([A-Za-z_][A-Za-z0-9_]*)\\s*\\($",
+      "clear": "(",
+      "suffix": "",
+      "role": "function",
+      "icon": "symbol-method"
+    },
+    {
+      "pattern": "^\\s*(?!if\\b|else\\b|for\\b|while\\b|switch\\b|catch\\b)(?:[A-Za-z_][A-Za-z0-9_]*::)?(~?[A-Za-z_][A-Za-z0-9_]*)\\s*\\([^;]*\\)\\s*\\{",
+      "clear": "{",
+      "suffix": "",
+      "role": "function",
+      "icon": "symbol-constructor"
+    },
+    {
+      "pattern": "^\\s*(?:input|extern)\\s+[A-Za-z0-9_]+\\s+([A-Za-z0-9_]+)",
+      "role": "field",
+      "icon": "symbol-parameter"
+    }
+  ],
+
+  "codemap.mqh": [
+    {
+      "pattern": "^\\s*class\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "clear": "{",
+      "role": "class",
+      "icon": "symbol-class"
+    },
+    {
+      "pattern": "^\\s*struct\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "clear": "{",
+      "role": "struct",
+      "icon": "symbol-struct"
+    },
+    {
+      "pattern": "^\\s*enum\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "clear": "{",
+      "role": "enum",
+      "icon": "symbol-enum"
+    },
+    {
+      "pattern": "^\\s*(?:void|int|double|bool|string|long|datetime|color|uchar|uint|short|char|float)\\s+(?:[A-Za-z_][A-Za-z0-9_]*::)?([A-Za-z_][A-Za-z0-9_]*)\\s*\\([^;]*\\)\\s*(?!;)",
+      "clear": "{",
+      "suffix": "",
+      "role": "function",
+      "icon": "symbol-method"
+    },
+    {
+      "pattern": "^\\s*(?:void|int|double|bool|string|long|datetime|color|uchar|uint|short|char|float)\\s+(?:[A-Za-z_][A-Za-z0-9_]*::)?([A-Za-z_][A-Za-z0-9_]*)\\s*\\($",
+      "clear": "(",
+      "suffix": "",
+      "role": "function",
+      "icon": "symbol-method"
+    },
+    {
+      "pattern": "^\\s*(?!if\\b|else\\b|for\\b|while\\b|switch\\b|catch\\b)(?:[A-Za-z_][A-Za-z0-9_]*::)?(~?[A-Za-z_][A-Za-z0-9_]*)\\s*\\([^;]*\\)\\s*\\{",
+      "clear": "{",
+      "suffix": "",
+      "role": "function",
+      "icon": "symbol-constructor"
+    },
+    {
+      "pattern": "^\\s*(?:input|extern)\\s+[A-Za-z0-9_]+\\s+([A-Za-z0-9_]+)",
+      "role": "field",
+      "icon": "symbol-parameter"
+    }
   ]
 }
