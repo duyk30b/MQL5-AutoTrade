@@ -1,6 +1,9 @@
 //+------------------------------------------------------------------+
 //|      UICommon.mqh  | | Thư viện tạo object trên chart            |
 //+------------------------------------------------------------------+
+#ifndef UI_COMMON_MQH
+#define UI_COMMON_MQH
+
 #property copyright "UICommon Library"
 #property link ""
 #property version "1.00"
@@ -11,6 +14,28 @@
 
 class UICommon {
  public:
+   void CreateRectangleLabel(
+      const long chartId, string name, int x, int y, int width, int height, color borderBoxColor
+   ) {
+      // Hình chữ nhật có thể set border
+      ObjectCreate(chartId, name, OBJ_RECTANGLE_LABEL, 0, 0, 0);
+      ObjectSetInteger(chartId, name, OBJPROP_XDISTANCE, x);
+      ObjectSetInteger(chartId, name, OBJPROP_YDISTANCE, y);
+      ObjectSetInteger(chartId, name, OBJPROP_XSIZE, width);
+      ObjectSetInteger(chartId, name, OBJPROP_YSIZE, height);
+      ObjectSetInteger(chartId, name, OBJPROP_BGCOLOR, clrNONE);
+      ObjectSetInteger(chartId, name, OBJPROP_BORDER_TYPE, BORDER_FLAT);
+      ObjectSetInteger(chartId, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+      ObjectSetInteger(chartId, name, OBJPROP_COLOR, borderBoxColor);
+      ObjectSetInteger(chartId, name, OBJPROP_STYLE, STYLE_SOLID);
+      ObjectSetInteger(chartId, name, OBJPROP_WIDTH, 1);
+      ObjectSetInteger(chartId, name, OBJPROP_BACK, false);
+      ObjectSetInteger(chartId, name, OBJPROP_SELECTABLE, true);
+      ObjectSetInteger(chartId, name, OBJPROP_SELECTED, false);
+      ObjectSetInteger(chartId, name, OBJPROP_HIDDEN, true);
+      ObjectSetInteger(chartId, name, OBJPROP_ZORDER, 100);
+   }
+
    bool CreateLabel(
       const long   chartId,
       const string name,
@@ -75,6 +100,24 @@ class UICommon {
       return true;
    }
 
+   void CreateEdit(long chartId, string name, int w, int h, string txt, int fontSize = 12) {
+      ObjectCreate(chartId, name, OBJ_EDIT, 0, 0, 0);
+      ObjectSetInteger(chartId, name, OBJPROP_XSIZE, w);          // Chiều rộng
+      ObjectSetInteger(chartId, name, OBJPROP_YSIZE, h);          // Chiều cao
+      ObjectSetString(chartId, name, OBJPROP_TEXT, txt);          // Giá trị ban đầu
+      ObjectSetInteger(chartId, name, OBJPROP_COLOR, clrBlack);   // Màu chữ (đen)
+      ObjectSetInteger(chartId, name, OBJPROP_BGCOLOR, clrWhite); // Màu nền (trắng)
+      ObjectSetInteger(chartId, name, OBJPROP_FONTSIZE, fontSize);
+      ObjectSetInteger(chartId, name, OBJPROP_ZORDER, 20);        // Hiển thị phía trước
+   }
+
+   bool getState(long chartId, string name) {
+      return (bool)ObjectGetInteger(chartId, name, OBJPROP_STATE);
+   }
+   string getText(long chartId, string name) {
+      return ObjectGetString(chartId, name, OBJPROP_TEXT);
+   }
+
    void setPosition(long chartId, string name, int x, int y) {
       ObjectSetInteger(chartId, name, OBJPROP_XDISTANCE, x);
       ObjectSetInteger(chartId, name, OBJPROP_YDISTANCE, y);
@@ -104,11 +147,19 @@ class UICommon {
    void setZOrder(long chartId, string name, int zOrder) {
       ObjectSetInteger(chartId, name, OBJPROP_ZORDER, zOrder);
    }
-
+   void setTextAlign(long chartId, string name, ENUM_ALIGN_MODE alignMode) {
+      ObjectSetInteger(chartId, name, OBJPROP_ALIGN, alignMode);
+   }
    void setState(long chartId, string name, bool state) {
       ObjectSetInteger(chartId, name, OBJPROP_STATE, state);
    }
-   bool getState(long chartId, string name) {
-      return (bool)ObjectGetInteger(chartId, name, OBJPROP_STATE);
+   void setShow(long chartId, string name, bool isShow) {
+      ObjectSetInteger(
+         chartId,
+         name,
+         OBJPROP_TIMEFRAMES,
+         isShow ? OBJ_ALL_PERIODS : OBJ_NO_PERIODS
+      );
    }
 };
+#endif // UI_COMMON_MQH
