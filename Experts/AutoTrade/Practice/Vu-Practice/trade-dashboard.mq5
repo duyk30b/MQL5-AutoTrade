@@ -1,9 +1,9 @@
 //+------------------------------------------------------------------+
-//|                         Trade Dashboard v4.4                     |
-//| Feature: Lock Trailing Stop Settings after Activation (LOCKED)   |
+//|                         Trade Dashboard v4.6                     |
+//| Feature: Visual Color Highlight for Active Trailing Stop Trades  |
 //+------------------------------------------------------------------+
 #property copyright "Trade Dashboard"
-#property version   "4.4"
+#property version   "4.6"
 #property strict
 
 #include <Trade/Trade.mqh>
@@ -25,7 +25,7 @@ struct TradeSettings {
    ulong ticket;
    int ts_start;
    int ts_dist;
-   bool ts_active; // Cờ báo hiệu: Đã kích hoạt Trailing Stop chưa?
+   bool ts_active; 
 };
 TradeSettings tsMemory[]; 
 
@@ -35,21 +35,18 @@ bool panelCreated = false;
 datetime lastUIUpdate = 0;
 int lastPositionsCount = -1;
 
-// Biến lưu SL/TP/LOT và TRAILING tạm cho Panel chính
 int currentMainSL = 0; 
 int currentMainTP = 0;
 double currentMainLot = 0.1; 
 int currentMainTS_Start = 1000; 
 int currentMainTS_Dist = 400;   
 
-// Các nút tăng giảm cho Panel chính
 string btnMainSL_Sub = "btnMainSL_Sub", btnMainSL_Add = "btnMainSL_Add";
 string btnMainTP_Sub = "btnMainTP_Sub", btnMainTP_Add = "btnMainTP_Add";
 string btnMainLot_Sub = "btnMainLot_Sub", btnMainLot_Add = "btnMainLot_Add";
 string btnMainTSStart_Sub = "btnMainTSStart_Sub", btnMainTSStart_Add = "btnMainTSStart_Add";
 string btnMainTSDist_Sub = "btnMainTSDist_Sub", btnMainTSDist_Add = "btnMainTSDist_Add";
 
-// === BIẾN CHO POPUP EDIT ===
 bool   popupActive = false;
 ulong  editTicket  = 0;
 double popupCurrentSL = 0; 
@@ -67,7 +64,6 @@ string btnTP_Sub     = "btnPopupTP_Sub", btnTP_Add = "btnPopupTP_Add";
 string btnTSStart_Sub = "btnPopupTSStart_Sub", btnTSStart_Add = "btnPopupTSStart_Add"; 
 string btnTSDist_Sub = "btnPopupTSDist_Sub", btnTSDist_Add = "btnPopupTSDist_Add"; 
 
-// === MẢNG UI (Nơi đã gây ra lỗi undeclared identifier, nay đã fix) ===
 string UI[] = {"panelBG","panelHeader","lblTitle","lblMode","lblInfo","lblProfit",
                "edtSL","edtTP","edtLot","edtTSStart","edtTSDist",
                "lblSL","lblTP","lblLot","lblRR","lblTSStart","lblTSDist","btnBuy","btnSell",
@@ -146,16 +142,16 @@ double NormalizeLot(double lot) {
    return lot;
 }
 
-// --- QUẢN LÝ BỘ NHỚ LỆNH ---
+// --- HỆ THỐNG QUẢN LÝ BỘ NHỚ LỆNH ---
 void SaveTradeMemory(ulong t, int start, int dist) {
    for(int i=0; i<ArraySize(tsMemory); i++) {
-      if(tsMemory[i].ticket == t) {
+      if(tsMemory[i].ticket == t) { 
          tsMemory[i].ts_start = start; tsMemory[i].ts_dist = dist; return;
       }
    }
    int size = ArraySize(tsMemory); ArrayResize(tsMemory, size+1);
    tsMemory[size].ticket = t; tsMemory[size].ts_start = start; tsMemory[size].ts_dist = dist;
-   tsMemory[size].ts_active = false; // Mặc định khi mới đẻ ra là chưa chạy
+   tsMemory[size].ts_active = false; 
 }
 
 bool GetTradeMemory(ulong t, int &start, int &dist, bool &active) {
@@ -178,9 +174,7 @@ void RegisterNewTrades() {
       ulong ticket = PositionGetTicket(i);
       if(PositionGetInteger(POSITION_MAGIC) == MagicNumber && PositionGetString(POSITION_SYMBOL) == _Symbol) {
          int s, d; bool a;
-         if(!GetTradeMemory(ticket, s, d, a)) {
-            SaveTradeMemory(ticket, currentMainTS_Start, currentMainTS_Dist);
-         }
+         if(!GetTradeMemory(ticket, s, d, a)) SaveTradeMemory(ticket, currentMainTS_Start, currentMainTS_Dist);
       }
    }
 }
@@ -197,7 +191,7 @@ int OnInit() {
    if(UIUpdateSeconds > 0) EventSetTimer(UIUpdateSeconds);
    lastUIUpdate = TimeCurrent();
    
-   Print("✓ Dashboard v4.4 (Locked TS Mode Enabled) Ready");
+   Print("✓ Dashboard v4.6 (Visual TS Color Update) Ready");
    return INIT_SUCCEEDED;
 }
 
@@ -218,7 +212,7 @@ void OnTick() {
 
 // === THUẬT TOÁN TRAILING STOP ===
 void ProcessTrailingStop() {
-   double safeStepPoints = 20 * _Point; // Chống spam sàn
+   double safeStepPoints = 1 * _Point; 
 
    for(int i = PositionsTotal() - 1; i >= 0; i--) {
       ulong ticket = PositionGetTicket(i);
@@ -244,7 +238,7 @@ void ProcessTrailingStop() {
                if(currentSL == 0 || (newSL - currentSL) >= safeStepPoints) {
                   if(trade.PositionModify(ticket, newSL, currentTP)) {
                      DrawTrailingStopLine(ticket, newSL);
-                     if(!is_active) MarkTSActive(ticket); // Khóa TS
+                     if(!is_active) { MarkTSActive(ticket); UpdateInfo(true); } // Update màn hình đổi màu ngay!
                   }
                }
             }
@@ -257,7 +251,7 @@ void ProcessTrailingStop() {
                if(currentSL == 0 || (currentSL - newSL) >= safeStepPoints) {
                   if(trade.PositionModify(ticket, newSL, currentTP)) {
                      DrawTrailingStopLine(ticket, newSL);
-                     if(!is_active) MarkTSActive(ticket); // Khóa TS
+                     if(!is_active) { MarkTSActive(ticket); UpdateInfo(true); } // Update màn hình đổi màu ngay!
                   }
                }
             }
@@ -282,7 +276,14 @@ void CleanUpTrailingLines() {
       string name = ObjectName(0, i);
       if(StringFind(name, "TS_Line_") == 0) {
          ulong ticket = (ulong)StringToInteger(StringSubstr(name, 8));
-         if(!PositionSelectByTicket(ticket)) ObjectDelete(0, name);
+         if(!PositionSelectByTicket(ticket)) ObjectDelete(0, name); 
+      }
+   }
+   
+   // --- THÊM ĐOẠN NÀY ĐỂ DỌN RÁC BỘ NHỚ ---
+   for(int i = ArraySize(tsMemory) - 1; i >= 0; i--) {
+      if(!PositionSelectByTicket(tsMemory[i].ticket)) {
+         ArrayRemove(tsMemory, i, 1); // Xé bỏ hồ sơ của lệnh đã đóng!
       }
    }
 }
@@ -380,7 +381,7 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
    }
 }
 
-// === LOGIC THỰC THI ===
+// === LOGIC THỰC THI GIAO DỊCH ===
 void OpenBuy() {
    double ask = NormalizePrice(SymbolInfoDouble(_Symbol, SYMBOL_ASK));
    double sl = (currentMainSL == 0) ? 0 : NormalizePrice(ask - currentMainSL * _Point);
@@ -402,7 +403,7 @@ bool ModifySingleTicket(ulong ticket, double newSL, double newTP) {
    } else { Print("❌ Lỗi sửa lệnh #", ticket); return false; }
 }
 
-// === LOGIC TĂNG GIẢM MAIN PANEL ===
+// === TĂNG GIẢM MAIN PANEL ===
 void AdjustMainPanelValue(string type, int direction) {
    int step = ButtonStepPoints;
    if(type == "SL") { currentMainSL += (direction * step); if(currentMainSL < 0) currentMainSL = 0; ObjectSetString(0, "edtSL", OBJPROP_TEXT, IntegerToString(currentMainSL)); }
@@ -417,7 +418,7 @@ void AdjustMainPanelValue(string type, int direction) {
    ChartRedraw();
 }
 
-// === LOGIC POPUP EDIT NÂNG CẤP ===
+// === POPUP EDIT HIỂN THỊ HỒ SƠ CÁ NHÂN ===
 void ShowEditDialog(ulong ticket) {
    if(popupActive && editTicket == ticket) return; 
    if(!PositionSelectByTicket(ticket)) return;
@@ -443,7 +444,6 @@ void ShowEditDialog(ulong ticket) {
    CreateLabel("lblTPTitle", x+20, y+75, "Take Profit:", clrBlack, 9, zItem);
    CreateButton(btnTP_Sub, x+90, y+73, 30, 22, "-", clrRed, 12, zItem); CreateEdit(txtTPVal, x+125, y+73, 80, 22, "", zItem, true); CreateButton(btnTP_Add, x+210, y+73, 30, 22, "+", clrGreen, 12, zItem);
    
-   // T.Start và T.Dist (LOCKED / UNLOCKED)
    if(is_ts_active) {
       CreateLabel("lblTSStartTitle", x+20, y+110, "T.Start (LOCKED):", clrRed, 9, zItem);
       CreateEdit(txtTSStartVal, x+125, y+108, 80, 22, IntegerToString(popupCurrentTS_Start), zItem, true);
@@ -523,7 +523,7 @@ void CloseModifyPopup() {
    popupActive = false; editTicket = 0; ChartRedraw();
 }
 
-// === CÁC HÀM UI CŨ (Panel Chính) ===
+// === TẠO VÀ CẬP NHẬT PANEL CHÍNH ===
 void CreatePanel() {
    if(panelCreated) return;
    int x = 10, y = 20, w = 280, h = 360; 
@@ -553,6 +553,7 @@ void CreatePanel() {
    panelCreated = true; ChartRedraw();
 }
 
+// === CẬP NHẬT GIAO DIỆN (NÂNG CẤP ĐỔI MÀU CHỮ) ===
 void UpdateInfo(bool forceUpdate) {
    RegisterNewTrades(); 
 
@@ -574,11 +575,21 @@ void UpdateInfo(bool forceUpdate) {
       string posText2 = StringFormat("P/L: %.2f", PositionGetDouble(POSITION_PROFIT));
       string lblName = "Pos_Label_" + IntegerToString(ticket);
       
+      // Lấy trạng thái Active của TS
+      int dummy1, dummy2; bool is_ts_active = false;
+      GetTradeMemory(ticket, dummy1, dummy2, is_ts_active);
+      
+      // [FIX MÀU MỚI] Đổi màu chữ nếu TS đã chạy!
+      color lblColor = is_ts_active ? clrMagenta : clrWhite;
+      
       if(layoutChanged) {
-         CreateLabel(lblName, 20, yPos, posText + " | " + posText2, clrWhite, 8);
+         CreateLabel(lblName, 20, yPos, posText + " | " + posText2, lblColor, 8);
          CreateButton("Pos_Close_" + IntegerToString(ticket), 220, yPos-2, 35, 18, "X", clrRed, 8);
          CreateButton("Pos_Edit_" + IntegerToString(ticket), 260, yPos-2, 35, 18, "E", clrOrange, 8);
-      } else { ObjectSetString(0, lblName, OBJPROP_TEXT, posText + " | " + posText2); }
+      } else { 
+         ObjectSetString(0, lblName, OBJPROP_TEXT, posText + " | " + posText2); 
+         ObjectSetInteger(0, lblName, OBJPROP_COLOR, lblColor); // Cập nhật màu động
+      }
       yPos += 25;
    }
    UpdatePnLText();
