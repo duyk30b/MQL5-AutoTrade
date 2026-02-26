@@ -1,9 +1,9 @@
 //+------------------------------------------------------------------+
-//|                         Trade Dashboard v4.6                     |
-//| Feature: Visual Color Highlight for Active Trailing Stop Trades  |
+//|                         Trade Dashboard v5.0 PRO                 |
+//| Feature: Hard Drive Memory (Global Variables) + No Lag UI        |
 //+------------------------------------------------------------------+
 #property copyright "Trade Dashboard"
-#property version   "4.6"
+#property version   "5.0"
 #property strict
 
 #include <Trade/Trade.mqh>
@@ -14,20 +14,11 @@ input int    StopLossPoints = 500;
 input int    TakeProfitPoints = 1000;
 input int    MagicNumber = 123456;
 input int    UIUpdateSeconds = 1;
-input int    ButtonStepPoints = 50; 
+input int    ButtonStepPoints = 10; 
 
 input string _ts = "=== TRAILING STOP SETTINGS ===";
 input int    TrailingStartPoints = 1000;  
 input int    TrailingDistPoints  = 400;   
-
-// === BỘ NHỚ ĐỘC LẬP CHO TỪNG LỆNH ===
-struct TradeSettings {
-   ulong ticket;
-   int ts_start;
-   int ts_dist;
-   bool ts_active; 
-};
-TradeSettings tsMemory[]; 
 
 // === BIẾN GLOBAL ===
 CTrade trade;
@@ -88,7 +79,7 @@ void UpdatePopupDisplay();
 void AdjustMainPanelValue(string type, int direction); 
 void ProcessTrailingStop(); 
 void DrawTrailingStopLine(ulong ticket, double price);
-void CleanUpTrailingLines();
+void CleanUpMemoryAndLines();
 void RegisterNewTrades(); 
 void SaveTradeMemory(ulong t, int start, int dist);
 bool GetTradeMemory(ulong t, int &start, int &dist, bool &active);
@@ -142,39 +133,69 @@ double NormalizeLot(double lot) {
    return lot;
 }
 
-// --- HỆ THỐNG QUẢN LÝ BỘ NHỚ LỆNH ---
+// === CÔNG NGHỆ GHI NHỚ LÊN Ổ CỨNG (GLOBAL VARIABLES) ===
 void SaveTradeMemory(ulong t, int start, int dist) {
-   for(int i=0; i<ArraySize(tsMemory); i++) {
-      if(tsMemory[i].ticket == t) { 
-         tsMemory[i].ts_start = start; tsMemory[i].ts_dist = dist; return;
-      }
-   }
-   int size = ArraySize(tsMemory); ArrayResize(tsMemory, size+1);
-   tsMemory[size].ticket = t; tsMemory[size].ts_start = start; tsMemory[size].ts_dist = dist;
-   tsMemory[size].ts_active = false; 
+   string ts = IntegerToString(t);
+   GlobalVariableSet("TD_Start_" + ts, start);
+   GlobalVariableSet("TD_Dist_" + ts, dist);
+   if(!GlobalVariableCheck("TD_Act_" + ts)) GlobalVariableSet("TD_Act_" + ts, 0.0);
 }
 
 bool GetTradeMemory(ulong t, int &start, int &dist, bool &active) {
-   for(int i=0; i<ArraySize(tsMemory); i++) {
-      if(tsMemory[i].ticket == t) {
-         start = tsMemory[i].ts_start; dist = tsMemory[i].ts_dist; active = tsMemory[i].ts_active; return true;
-      }
+   string ts = IntegerToString(t);
+   if(GlobalVariableCheck("TD_Start_" + ts) && GlobalVariableCheck("TD_Dist_" + ts)) {
+      start = (int)GlobalVariableGet("TD_Start_" + ts);
+      dist = (int)GlobalVariableGet("TD_Dist_" + ts);
+      active = (GlobalVariableGet("TD_Act_" + ts) > 0.5); // Lớn hơn 0.5 nghĩa là True (đã khóa)
+      return true;
    }
    return false;
 }
 
 void MarkTSActive(ulong t) {
-   for(int i=0; i<ArraySize(tsMemory); i++) {
-      if(tsMemory[i].ticket == t) { tsMemory[i].ts_active = true; return; }
-   }
+   GlobalVariableSet("TD_Act_" + IntegerToString(t), 1.0); // Bật công tắc khóa
 }
 
 void RegisterNewTrades() {
    for(int i = 0; i < PositionsTotal(); i++) {
       ulong ticket = PositionGetTicket(i);
       if(PositionGetInteger(POSITION_MAGIC) == MagicNumber && PositionGetString(POSITION_SYMBOL) == _Symbol) {
-         int s, d; bool a;
-         if(!GetTradeMemory(ticket, s, d, a)) SaveTradeMemory(ticket, currentMainTS_Start, currentMainTS_Dist);
+         if(!GlobalVariableCheck("TD_Start_" + IntegerToString(ticket))) {
+            SaveTradeMemory(ticket, currentMainTS_Start, currentMainTS_Dist);
+         }
+      }
+   }
+}
+
+// Hàm dọn rác Đường line VÀ Xóa rác Ổ cứng chuẩn xác 100%
+void CleanUpMemoryAndLines() {
+   // 1. Dọn đường vạch hồng
+   for(int i = ObjectsTotal(0, -1, -1) - 1; i >= 0; i--) {
+      string name = ObjectName(0, i);
+      if(StringFind(name, "TS_Line_") == 0) {
+         ulong t = (ulong)StringToInteger(StringSubstr(name, 8));
+         if(!PositionSelectByTicket(t)) ObjectDelete(0, name); 
+      }
+   }
+   
+   // 2. Dọn tủ ổ cứng của lệnh đã chết (Tối ưu chống bỏ sót)
+   for(int i = GlobalVariablesTotal() - 1; i >= 0; i--) {
+      string gName = GlobalVariableName(i);
+      // Chỉ xét các biến do EA của ta tạo ra
+      if(StringFind(gName, "TD_Start_") == 0 || StringFind(gName, "TD_Dist_") == 0 || StringFind(gName, "TD_Act_") == 0) {
+         
+         // Lấy mã Ticket tùy theo độ dài tên biến
+         string strTicket = "";
+         if(StringFind(gName, "TD_Start_") == 0) strTicket = StringSubstr(gName, 9);
+         else if(StringFind(gName, "TD_Dist_") == 0) strTicket = StringSubstr(gName, 8);
+         else if(StringFind(gName, "TD_Act_") == 0) strTicket = StringSubstr(gName, 7);
+         
+         ulong t = (ulong)StringToInteger(strTicket);
+         
+         // Nếu lệnh không còn trên sàn, Tiêu hủy biến này ngay!
+         if(!PositionSelectByTicket(t)) {
+            GlobalVariableDel(gName); 
+         }
       }
    }
 }
@@ -182,7 +203,8 @@ void RegisterNewTrades() {
 // --- LOGIC CHÍNH ---
 int OnInit() {
    trade.SetExpertMagicNumber(MagicNumber);
-   ChartSetInteger(0, CHART_EVENT_MOUSE_MOVE, true);
+   // ĐÃ TẮT DÒNG CHART_EVENT_MOUSE MÀ BÁC YÊU CẦU ĐỂ CHỐNG LAG:
+   // ChartSetInteger(0, CHART_EVENT_MOUSE_MOVE, true); 
    
    currentMainSL = StopLossPoints; currentMainTP = TakeProfitPoints; currentMainLot = NormalizeLot(LotSize); 
    currentMainTS_Start = TrailingStartPoints; currentMainTS_Dist = TrailingDistPoints;   
@@ -191,7 +213,7 @@ int OnInit() {
    if(UIUpdateSeconds > 0) EventSetTimer(UIUpdateSeconds);
    lastUIUpdate = TimeCurrent();
    
-   Print("✓ Dashboard v4.6 (Visual TS Color Update) Ready");
+   Print("✓ Dashboard v5.0 PRO (Hard Drive Memory + No Lag) Ready");
    return INIT_SUCCEEDED;
 }
 
@@ -212,6 +234,7 @@ void OnTick() {
 
 // === THUẬT TOÁN TRAILING STOP ===
 void ProcessTrailingStop() {
+   // CHỐNG SPAM: Sửa thành 20 points để an toàn tuyệt đối cho tài khoản Real
    double safeStepPoints = 1 * _Point; 
 
    for(int i = PositionsTotal() - 1; i >= 0; i--) {
@@ -238,7 +261,7 @@ void ProcessTrailingStop() {
                if(currentSL == 0 || (newSL - currentSL) >= safeStepPoints) {
                   if(trade.PositionModify(ticket, newSL, currentTP)) {
                      DrawTrailingStopLine(ticket, newSL);
-                     if(!is_active) { MarkTSActive(ticket); UpdateInfo(true); } // Update màn hình đổi màu ngay!
+                     if(!is_active) { MarkTSActive(ticket); UpdateInfo(true); } 
                   }
                }
             }
@@ -251,7 +274,7 @@ void ProcessTrailingStop() {
                if(currentSL == 0 || (currentSL - newSL) >= safeStepPoints) {
                   if(trade.PositionModify(ticket, newSL, currentTP)) {
                      DrawTrailingStopLine(ticket, newSL);
-                     if(!is_active) { MarkTSActive(ticket); UpdateInfo(true); } // Update màn hình đổi màu ngay!
+                     if(!is_active) { MarkTSActive(ticket); UpdateInfo(true); } 
                   }
                }
             }
@@ -269,23 +292,6 @@ void DrawTrailingStopLine(ulong ticket, double price) {
       ObjectSetInteger(0, lineName, OBJPROP_HIDDEN, true); ObjectSetInteger(0, lineName, OBJPROP_SELECTABLE, false); ObjectSetInteger(0, lineName, OBJPROP_BACK, false); 
    } else ObjectSetDouble(0, lineName, OBJPROP_PRICE, price);
    ChartRedraw();
-}
-
-void CleanUpTrailingLines() {
-   for(int i = ObjectsTotal(0, -1, -1) - 1; i >= 0; i--) {
-      string name = ObjectName(0, i);
-      if(StringFind(name, "TS_Line_") == 0) {
-         ulong ticket = (ulong)StringToInteger(StringSubstr(name, 8));
-         if(!PositionSelectByTicket(ticket)) ObjectDelete(0, name); 
-      }
-   }
-   
-   // --- THÊM ĐOẠN NÀY ĐỂ DỌN RÁC BỘ NHỚ ---
-   for(int i = ArraySize(tsMemory) - 1; i >= 0; i--) {
-      if(!PositionSelectByTicket(tsMemory[i].ticket)) {
-         ArrayRemove(tsMemory, i, 1); // Xé bỏ hồ sơ của lệnh đã đóng!
-      }
-   }
 }
 
 // === XỬ LÝ SỰ KIỆN CLICK CHUỘT ===
@@ -418,7 +424,7 @@ void AdjustMainPanelValue(string type, int direction) {
    ChartRedraw();
 }
 
-// === POPUP EDIT HIỂN THỊ HỒ SƠ CÁ NHÂN ===
+// === POPUP EDIT ===
 void ShowEditDialog(ulong ticket) {
    if(popupActive && editTicket == ticket) return; 
    if(!PositionSelectByTicket(ticket)) return;
@@ -553,7 +559,7 @@ void CreatePanel() {
    panelCreated = true; ChartRedraw();
 }
 
-// === CẬP NHẬT GIAO DIỆN (NÂNG CẤP ĐỔI MÀU CHỮ) ===
+// === CẬP NHẬT GIAO DIỆN MÀU SẮC ===
 void UpdateInfo(bool forceUpdate) {
    RegisterNewTrades(); 
 
@@ -562,7 +568,7 @@ void UpdateInfo(bool forceUpdate) {
    if(!forceUpdate && !layoutChanged) { UpdatePnLText(); return; }
    lastPositionsCount = currentPositions;
    
-   if(layoutChanged) { DeleteAllPositionObjects(); CleanUpTrailingLines(); }
+   if(layoutChanged) { DeleteAllPositionObjects(); CleanUpMemoryAndLines(); }
    
    int cnt = 0, yPos = 250; double profit = 0;
    
@@ -575,11 +581,9 @@ void UpdateInfo(bool forceUpdate) {
       string posText2 = StringFormat("P/L: %.2f", PositionGetDouble(POSITION_PROFIT));
       string lblName = "Pos_Label_" + IntegerToString(ticket);
       
-      // Lấy trạng thái Active của TS
       int dummy1, dummy2; bool is_ts_active = false;
       GetTradeMemory(ticket, dummy1, dummy2, is_ts_active);
       
-      // [FIX MÀU MỚI] Đổi màu chữ nếu TS đã chạy!
       color lblColor = is_ts_active ? clrMagenta : clrWhite;
       
       if(layoutChanged) {
@@ -588,7 +592,7 @@ void UpdateInfo(bool forceUpdate) {
          CreateButton("Pos_Edit_" + IntegerToString(ticket), 260, yPos-2, 35, 18, "E", clrOrange, 8);
       } else { 
          ObjectSetString(0, lblName, OBJPROP_TEXT, posText + " | " + posText2); 
-         ObjectSetInteger(0, lblName, OBJPROP_COLOR, lblColor); // Cập nhật màu động
+         ObjectSetInteger(0, lblName, OBJPROP_COLOR, lblColor); 
       }
       yPos += 25;
    }
