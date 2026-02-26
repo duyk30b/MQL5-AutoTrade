@@ -1,0 +1,62 @@
+levelrage = 1:100
+lệnh mua 1-lot eur-usd tuong duong mua 100.000 eur , 
+   gia hien tai 1 eur = 1.18276 usd
+   se dung 118,276 usd de mua 100,000 eur
+   voi levelrage 1:100 se dung 1,182 usd tien margin de thuc hien lenh 118,276 usd
+
+Free Margin = Equity - Margin = 91721 - 1182 = 90539
+Margin level = Equity / Margin = 90539 / 1182 = 7754 %
+
+call margin khi margin level = 30%
+
+lenh mua cap cheo
+mua eur-jpy hanghoa - tiente
+lenh mua 1 lot eurjpy tuong duong mua 100.000 eur
+lenh mua 1 lot usd-jpy tuong duong mua 100000 usd
+
+lot <=  % risk stoploss, balance, call margin , commission , swap
+1 lot dung bao nhieu margin ,
+lenh mua 1lot gia di 1 point lo 10 u
+% risk va balance => duoc [phep] lo 100u tuong duong 10 point cho lenh 1lot
+stoploss la 200 point se mua lenh 0.005 lot thi khi gia di duoc 200point se lo 100u
+
+grid
+lot <=  % risk stoploss + 2 so LENH  dca(trung binh gia) / multilot(x2) / distance (point)
+
+RISK MONEY
+RISK PERCENT %BALANCE : 5% (BALANCE 1.000.000$) ==> RISK MONEY = 50.000$
+RISK PERCENT %EQUITY: 4% (EQUITY 800.000$) ==> RISK MONEY = 32.000$
+
+
+== 1 lot EUROUSD => 100.000$
+ ==> DIGITS 5 ===> POINT 0.00001 ===> 0.00002 (0.000015)
+PIP => 0.0001
+
+1 POINT: 0.00001 => 1$ 
+1 PIP = 10POINT = 10$
+
+BUY 1lot
+=> Gía giảm 100 POINT => lỗ  100$
+=> Gía giảm 200 POINT => lỗ  200$
+
+BUY 5lot
+=> Gía giảm 100 POINT => lỗ  500$
+=> Gía giảm 200 POINT => lỗ  1000$
+
+BUY 15lot
+=> Gía giảm 100 POINT => lỗ  1500$
+=> Gía giảm 300 POINT => lỗ  4500$
+
+BUY 5lot
+=> Gía giảm 200 POINT => lỗ  1000$
+
+BUY 2.5lot
+=> Gía giảm 400 POINT => lỗ  1000$ ==> RISK MONEY
+
+RISK MONEY 2000$
+BUY 6.666 lot: Gía giảm 300 POINT
+BUY 10 lot: Gía giảm 200 POINT
+BUY 20 lot: Gía giảm 100 POINT
+
+RISK 5%BANLANCE : BALANCE 1tr$
+BUY 100 lot: Gía giảm 500 POINT
