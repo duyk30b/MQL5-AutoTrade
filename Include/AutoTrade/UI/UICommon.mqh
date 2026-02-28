@@ -40,6 +40,8 @@ class UICommon {
       const long   chartId,
       const string name,
       const string text,
+      int          x,
+      int          y,
       int          fontSize   = 8,
       color        textColor  = clrBlack,
       string       fontFamily = "Arial"
@@ -51,6 +53,8 @@ class UICommon {
 
       ObjectSetInteger(chartId, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
       ObjectSetInteger(chartId, name, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
+      ObjectSetInteger(chartId, name, OBJPROP_XDISTANCE, x);
+      ObjectSetInteger(chartId, name, OBJPROP_YDISTANCE, y);
 
       ObjectSetString(chartId, name, OBJPROP_TEXT, text);
       ObjectSetInteger(chartId, name, OBJPROP_FONTSIZE, fontSize);
@@ -69,6 +73,8 @@ class UICommon {
       const long   chartId,
       const string name,
       const string text,
+      int          x,
+      int          y,
       int          width           = 100,
       int          height          = 35,
       color        textColor       = clrBlack,
@@ -81,6 +87,10 @@ class UICommon {
          return false;
 
       ObjectSetInteger(chartId, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+      ObjectSetInteger(chartId, name, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
+      ObjectSetInteger(chartId, name, OBJPROP_XDISTANCE, x);
+      ObjectSetInteger(chartId, name, OBJPROP_YDISTANCE, y);
+
       ObjectSetInteger(chartId, name, OBJPROP_XSIZE, width);
       ObjectSetInteger(chartId, name, OBJPROP_YSIZE, height);
 

@@ -8,35 +8,34 @@
 #property link "https://mql5.com"
 #property version "1.00"
 
+#include "TDContainer.mqh"
 #include "TDPopupPosition.mqh"
-#include "TradeDashboardContainer.mqh"
 #include "TradeDashboardContext.mqh"
 
 #include <AutoTrade/UI/UICommon.mqh>
 
 #include <Trade/Trade.mqh>
 
-uint                    lastUITimerEvent   = 0;
-uint                    lastUITimerRefresh = 0;
+uint            lastUITimerEvent   = 0;
+uint            lastUITimerRefresh = 0;
 
-CTrade                  cTrade;
-UICommon                uiCommon;
+CTrade          cTrade;
+UICommon        uiCommon;
 
-TradeDashboardContainer tradeDashboardContainer;
-TDPopupPosition         tdPopupPosition;
+TDContainer     tdContainer;
+TDPopupPosition tdPopupPosition;
 
-input ulong             MagicNumber                 = 20260206;
-input int               Slippage                    = 5;
+input ulong     MagicNumber                 = 20260206;
+input int       Slippage                    = 5;
 
-input double            g_lotSizeDefault            = 0.1;
-input int               g_slPointsDefault           = 4000;
-input int               g_tpPointsDefault           = 4000;
-input bool              g_enableTrailingStopDefault = true;
-input int               g_tsStartPointsDefault      = 1000;
-input int               g_tsStepPointsDefault       = 10;
-input int               g_tsDistancePointsDefault   = 500;
+input int       g_slPointsDefault           = 500;
+input int       g_tpPointsDefault           = 1000;
+input bool      g_enableTrailingStopDefault = true;
+input int       g_tsStartPointsDefault      = 500;
+input int       g_tsStepPointsDefault       = 10;
+input int       g_tsDistancePointsDefault   = 100;
 
-PositionInfo            g_positionList[];
+PositionInfo    g_positionList[];
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -47,20 +46,36 @@ int OnInit() {
    cTrade.SetExpertMagicNumber(MagicNumber);
    cTrade.SetDeviationInPoints(Slippage);
 
-   if(!tradeDashboardContainer.Create(0, 20, 20, 500, 500)) {
+   Print(" ACCOUNT_LEVERAGE : " + IntegerToString(AccountInfoInteger(ACCOUNT_LEVERAGE)));
+   Print(" ACCOUNT_MARGIN_SO_CALL : " + DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN_SO_CALL)));
+   Print(" ACCOUNT_MARGIN_SO_SO : " + DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN_SO_SO)));
+
+   int totalPositions = PositionsTotal();
+   ArrayResize(g_positionList, totalPositions);
+   for(int i = 0; i < totalPositions; i++) {
+      if(PositionGetTicket(i)) {
+         g_positionList[i].ticket                     = PositionGetTicket(i);
+         g_positionList[i].enableTrailingStop         = false;
+         g_positionList[i].trailingStopStartPoints    = 0;
+         g_positionList[i].trailingStopStepPoints     = 0;
+         g_positionList[i].trailingStopDistancePoints = 0;
+      }
+   }
+
+   if(!tdContainer.Create(20, 20, 500, 500)) {
       Print("Không thể tạo Panel!");
       return INIT_FAILED;
    }
-   tradeDashboardContainer.SetLotSizeDefault(g_lotSizeDefault);
-   tradeDashboardContainer.SetStopLossPointsDefault(g_slPointsDefault);
-   tradeDashboardContainer.SetTakeProfitPointsDefault(g_tpPointsDefault);
-   tradeDashboardContainer.SetEnableTrailingStop(g_enableTrailingStopDefault);
-   tradeDashboardContainer.SetTrailingStopStartPointsDefault(g_tsStartPointsDefault);
-   tradeDashboardContainer.SetTrailingStopStepPointsDefault(g_tsStepPointsDefault);
-   tradeDashboardContainer.SetTrailingStopDistancePointsDefault(g_tsDistancePointsDefault);
+   tdContainer.m_tdTabTrade.SetStopLossPoints(g_slPointsDefault);
+   tdContainer.m_tdTabTrade.SetTakeProfitPoints(g_tpPointsDefault);
+   tdContainer.m_tdTabTrade.SetEnableTrailingStop(g_enableTrailingStopDefault);
+   tdContainer.m_tdTabTrade.SetTrailingStopStartPoints(g_tsStartPointsDefault);
+   tdContainer.m_tdTabTrade.SetTrailingStopStepPoints(g_tsStepPointsDefault);
+   tdContainer.m_tdTabTrade.SetTrailingStopDistancePoints(g_tsDistancePointsDefault);
 
-   tdPopupPosition.Create(0, 520, 20, 300, 390, false);
-
+   tdPopupPosition.Initialization();
+   tdPopupPosition.StartDraw(520, 20, 300, 390, false);
+   Print("Create Panel Success!");
    return (INIT_SUCCEEDED);
 }
 
@@ -83,20 +98,20 @@ void OnTick() {
       OnMQLTesterRefresh();
    }
    if(!(bool)MQLInfoInteger(MQL_TESTER)) {
-      tradeDashboardContainer.RefreshData();
-      tradeDashboardContainer.StartProcessTrailingStop();
+      tdContainer.RefreshData();
+      StartProcessTrailingStop();
    }
 }
 
 void OnTimer() {
    if(!(bool)MQLInfoInteger(MQL_TESTER)) {
-      tradeDashboardContainer.RefreshData();
-      tradeDashboardContainer.StartProcessTrailingStop();
+      tdContainer.RefreshData();
+      StartProcessTrailingStop();
    }
 }
 
 void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam) {
-   tradeDashboardContainer.OnChartEvent(id, lparam, dparam, sparam);
+   tdContainer.OnChartEvent(id, lparam, dparam, sparam);
    tdPopupPosition.OnChartEvent(id, lparam, dparam, sparam);
 }
 
@@ -106,7 +121,7 @@ void OnMQLTesterEvent() {
    }
    lastUITimerEvent = GetTickCount();
 
-   tradeDashboardContainer.OnMQLTesterEvent();
+   tdContainer.OnMQLTesterEvent();
    tdPopupPosition.OnMQLTesterEvent();
 }
 
@@ -116,11 +131,63 @@ void OnMQLTesterRefresh() {
    }
    lastUITimerRefresh = GetTickCount();
 
-   tradeDashboardContainer.OnMQLTesterRefresh();
+   tdContainer.OnMQLTesterRefresh();
    tdPopupPosition.OnMQLTesterRefresh();
+}
+
+// Danh sách hàm xử lý chính cho Trailing Stop, được gọi ở OnTick và OnTimer
+void StartProcessTrailingStop() {
+   int totalPositions = PositionsTotal();
+   for(int i = 0; i < totalPositions; i++) {
+      // Tránh lỗi khi thực tế nhiều item hơn trong g_positionList
+      if(i >= ArraySize(g_positionList)) {
+         continue;
+      }
+      if(!g_positionList[i].enableTrailingStop) {
+         continue;
+      }
+      if(!PositionSelectByTicket(g_positionList[i].ticket)) {
+         continue;
+      }
+
+      string symbol           = PositionGetString(POSITION_SYMBOL);
+      double priceOpen        = PositionGetDouble(POSITION_PRICE_OPEN);
+      double sl               = PositionGetDouble(POSITION_SL);
+      double tp               = PositionGetDouble(POSITION_TP);
+
+      double tsStartPoints    = g_positionList[i].trailingStopStartPoints;
+      double tsStepPoints     = g_positionList[i].trailingStopStepPoints;
+      double tsDistancePoints = g_positionList[i].trailingStopDistancePoints;
+
+      double POINT            = SymbolInfoDouble(symbol, SYMBOL_POINT);
+
+      if(g_positionList[i].type == POSITION_TYPE_BUY) {
+         double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+         if((bid - priceOpen) >= tsStartPoints * POINT) {
+            double newStopLoss = priceOpen + (tsStartPoints - tsDistancePoints) * POINT;
+            if(sl < newStopLoss || sl == 0) {
+               cTrade.PositionModify(g_positionList[i].ticket, newStopLoss, tp);
+               g_positionList[i].trailingStopStartPoints += tsStepPoints;
+            }
+         }
+      } else if(g_positionList[i].type == POSITION_TYPE_SELL) {
+         double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+         if((priceOpen - ask) >= tsStartPoints * POINT) {
+            double newStopLoss = priceOpen - (tsStartPoints - tsDistancePoints) * POINT;
+            if(sl > newStopLoss || sl == 0) {
+               cTrade.PositionModify(g_positionList[i].ticket, newStopLoss, tp);
+               g_positionList[i].trailingStopStartPoints += tsStepPoints;
+            }
+         }
+      }
+   }
 }
 
 // Danh sách các hàm callback
 void openPopupModifyPosition(ulong ticketId) {
    tdPopupPosition.openPopup(ticketId);
+}
+
+void changeVolumeRisk() {
+   tdContainer.RefreshData();
 }

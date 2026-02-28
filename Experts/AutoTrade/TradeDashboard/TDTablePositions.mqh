@@ -13,7 +13,6 @@ struct ButtonInfo {
 };
 class TDTablePositions : public UITableListener {
  public:
-   long       m_chartId;
    int        m_x;
    int        m_y;
    int        m_rows;
@@ -22,20 +21,17 @@ class TDTablePositions : public UITableListener {
 
    bool       m_isMinimized;
 
-   ButtonInfo g_buttons[];         // Store button info for event handling
+   ButtonInfo g_buttons[];   // Store button info for event handling
    color      clrBtnBg;
-   color      clrTextGreen;   // Green
-   color      clrTextRed;   // Red
+   color      clrTextGreen;  // Green
+   color      clrTextRed;    // Red
    color      clrTextOrange; // Orange
 
    color      textColorBase;
 
-   bool       Initialization(long chartId, int _x, int _y, int _rows, int _cols) {
-      m_chartId     = chartId;
-      m_x           = _x;
-      m_y           = _y;
-      m_rows        = _rows;
-      m_cols        = _cols;
+   bool       Initialization() {
+      m_rows        = 6;
+      m_cols        = 9;
       m_page        = 1;
       m_isMinimized = false;
 
@@ -56,7 +52,7 @@ class TDTablePositions : public UITableListener {
       // clang-format on
 
       uiTable.SetListener(&this);
-      uiTable.Initialization(0, "PositionTable", m_x, m_y, m_rows, m_cols);
+      uiTable.Initialization(0, "PositionTable", m_rows, m_cols);
 
       uiTable.SetTheme(InpTheme);
       uiTable.SetZOrderBase(2);
@@ -80,7 +76,7 @@ class TDTablePositions : public UITableListener {
 
    int  GetHeight() { return uiTable.GetHeight(); }
 
-   void StartDrawContent() { uiTable.StartDrawContent(); }
+   void StartDraw(int x, int y);
 
    int  GetObjectNameList(string &objNameList[]) { return uiTable.GetObjectNameList(objNameList); }
 
@@ -139,7 +135,7 @@ class TDTablePositions : public UITableListener {
             if(profit > 0) {
                profitColor = clrTextGreen; // Green
             } else if(profit < 0) {
-               profitColor = clrTextRed; // Red
+               profitColor = clrTextRed;   // Red
             } else {
                profitColor = textColorBase;
             }
@@ -171,7 +167,7 @@ class TDTablePositions : public UITableListener {
       }
 
       // Draw table
-      ChartRedraw(m_chartId);
+      ChartRedraw(g_chartId);
    }
 
    void HandleClosePosition(ulong ticketId) {
@@ -241,3 +237,9 @@ class TDTablePositions : public UITableListener {
       }
    };
 };
+
+void TDTablePositions::StartDraw(int x, int y) {
+   m_x = x;
+   m_y = y;
+   uiTable.StartDraw(m_x, m_y);
+}
