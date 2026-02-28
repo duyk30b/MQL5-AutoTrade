@@ -11,14 +11,18 @@
 #property link "https://mql5.com"
 #property version "1.00"
 
+#include <AutoTrade/UI/UIDefines.mqh>
+
 class UICheckboxListener {
  public:
-   virtual void onCheckedChange(bool newValue) = 0;
+   virtual void onChangeValue(bool newValue) = 0;
 };
 
 class UICheckbox {
  private:
    UICheckboxListener *m_listener;
+   FOnChange           m_callback;
+   void               *m_context;        // lưu pointer đến object chủ
 
    long                m_chartId;        // ID của chart
    string              m_name;           // Tên unique cho control
@@ -40,19 +44,18 @@ class UICheckbox {
    UICheckbox() {}
    ~UICheckbox() { Destroy(); }
 
-   void SetListener(UICheckboxListener *listener) { m_listener = listener; };
+   bool GetValue() const { return m_value; }
 
-   void Initialization(
-      long chartId, string name, int x, int y, string labelText, int fontSize = 10
-   ) {
+   void SetListener(UICheckboxListener *listener) { m_listener = listener; };
+   void setCallback(void *ctx, FOnChange cb) {
+      m_callback = cb;
+      m_context  = ctx;
+   }
+
+   void Initialization(long chartId, string name) {
       m_chartId        = chartId;
       m_name           = name;
-      m_x              = x;
-      m_y              = y;
-      m_size           = fontSize + 4; // Kích thước checkbox dựa trên font size để đảm bảo cân đối
-      m_value          = false;
-      m_labelText      = labelText;
-      m_fontSize       = fontSize;
+
       m_labelTextColor = clrWhite;
       m_normalBoxColor = clrWhite;
       m_checkBoxColor  = clrLightBlue;
@@ -62,45 +65,73 @@ class UICheckbox {
       m_btnBoxName = "Obj_" + name + "_Box";
    }
 
-   void GetObjectNameList(string &objNameList[]) {
+   int GetObjectNameList(string &objNameList[]) {
       ArrayResize(objNameList, 2);
       objNameList[0] = m_labelName;
       objNameList[1] = m_btnBoxName;
+      return 2;
    }
 
-   void SetValue(bool value) {
+   void SetValue(bool value) { m_value = value; };
+   void SetLabel(string text, color labelTextColor = clrNONE) {
+      m_labelText = text;
+      if(labelTextColor != clrNONE) {
+         m_labelTextColor = labelTextColor;
+      }
+   }
+
+   void UpdateValue(bool value) {
       if(m_value != value) {
          m_value = value;
          if(m_value) {
-            ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_COLOR, m_checkBoxColor);
             ObjectSetString(m_chartId, m_btnBoxName, OBJPROP_TEXT, "þ");
             ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_COLOR, m_checkBoxColor);
             ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_BORDER_COLOR, m_checkBoxColor);
          } else {
-            ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_COLOR, m_normalBoxColor);
             ObjectSetString(m_chartId, m_btnBoxName, OBJPROP_TEXT, "");
             ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_COLOR, m_normalBoxColor);
             ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_BORDER_COLOR, m_normalBoxColor);
          }
       }
    };
-   void SetLabelText(string text) {
+   void UpdateLabel(string text, color labelTextColor = clrNONE) {
       m_labelText = text;
       ObjectSetString(m_chartId, m_labelName, OBJPROP_TEXT, m_labelText);
-   };
+
+      if(labelTextColor != clrNONE) {
+         m_labelTextColor = labelTextColor;
+         ObjectSetInteger(m_chartId, m_labelName, OBJPROP_COLOR, m_labelTextColor);
+      }
+   }
+
+   void OnChangeValue(double value) {
+      if(m_listener != NULL) {
+         m_listener.onChangeValue(m_value);
+      }
+      if(m_callback != NULL) {
+         m_callback(m_context, UI_EVENT_CHANGE_VALUE, m_value);
+      }
+   }
 
    void Destroy() {
       ObjectDelete(m_chartId, m_labelName);
       ObjectDelete(m_chartId, m_btnBoxName);
    }
 
-   void StartDrawContent();
+   void StartDraw(int x, int y, bool value, string labelText, int fontSize = 10);
    void ClickBtnCheckbox();
    void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
    void OnMQLTesterEvent();
 };
 
-void UICheckbox::StartDrawContent() {
+void UICheckbox::StartDraw(int x, int y, bool value, string labelText, int fontSize = 10) {
+   m_x         = x;
+   m_y         = y;
+   m_size      = fontSize + 4; // Kích thước checkbox dựa trên font size để đảm bảo cân đối
+   m_value     = value;
+   m_labelText = labelText;
+   m_fontSize  = fontSize;
+
    // Create button
    ObjectCreate(m_chartId, m_btnBoxName, OBJ_BUTTON, 0, 0, 0);
    ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_CORNER, CORNER_LEFT_UPPER);
@@ -109,12 +140,22 @@ void UICheckbox::StartDrawContent() {
    ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_XSIZE, m_size);
    ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_YSIZE, m_size);
 
-   ObjectSetString(m_chartId, m_btnBoxName, OBJPROP_TEXT, "");
    ObjectSetString(m_chartId, m_btnBoxName, OBJPROP_FONT, "Wingdings");
    ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_FONTSIZE, m_fontSize + 4);
-   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_COLOR, m_normalBoxColor);
+   ObjectSetString(m_chartId, m_btnBoxName, OBJPROP_TEXT, m_value ? "þ" : "");
+   ObjectSetInteger(
+      m_chartId,
+      m_btnBoxName,
+      OBJPROP_COLOR,
+      m_value ? m_checkBoxColor : m_normalBoxColor
+   );
+   ObjectSetInteger(
+      m_chartId,
+      m_btnBoxName,
+      OBJPROP_BORDER_COLOR,
+      m_value ? m_checkBoxColor : m_normalBoxColor
+   );
    ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_BGCOLOR, clrNONE);
-   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_BORDER_COLOR, clrNONE);
 
    ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_BACK, false);
    ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_STATE, false);
@@ -142,10 +183,8 @@ void UICheckbox::StartDrawContent() {
 
 void UICheckbox::ClickBtnCheckbox() {
    ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_STATE, false);
-   SetValue(!m_value);
-   if(m_listener != NULL) {
-      m_listener.onCheckedChange(m_value);
-   }
+   UpdateValue(!m_value);
+   OnChangeValue(m_value);
 }
 
 void UICheckbox::OnChartEvent(

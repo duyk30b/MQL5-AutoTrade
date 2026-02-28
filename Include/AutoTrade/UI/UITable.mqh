@@ -123,11 +123,9 @@ class UITable {
    void SetListener(UITableListener *listener) { m_listener = listener; };
 
    // Khởi tạo panel
-   void Initialization(long chartId, string name, int x, int y, int rows, int cols) {
+   void Initialization(long chartId, string name, int rows, int cols) {
       m_chartId      = chartId;
       m_name         = name;
-      m_x            = x;
-      m_y            = y;
 
       m_total        = 0;
       m_page         = 1;
@@ -146,33 +144,32 @@ class UITable {
       ArrayResize(m_tableHeader, cols);
 
       // clang-format off
-   // Default Dark theme
-   if (m_currentTheme == THEME_DARK)
-   {
-      m_headerTextColor = C'220,220,220';
-      m_headerBgColor   = C'30,30,90';
-      m_textColorBase = C'200,200,200';
-      m_contentBtnBgColor = C'70,130,180';
-      m_cellBorderColor     = C'60,60,60';
-      m_rowBgColorOdd  = C'35,35,35';
-      m_rowBgColorEven   = C'45,45,45';
-      m_rowBgColorHover      = C'50,50,80';
-      m_paginationBtnBgColor     = C'70,70,120';
-      m_paginationBtnBorderColor = C'100,100,160';
+      if (m_currentTheme == THEME_DARK)
+      {
+         m_headerTextColor = C'220,220,220';
+         m_headerBgColor   = C'30,30,90';
+         m_textColorBase = C'200,200,200';
+         m_contentBtnBgColor = C'70,130,180';
+         m_cellBorderColor     = C'60,60,60';
+         m_rowBgColorOdd  = C'35,35,35';
+         m_rowBgColorEven   = C'45,45,45';
+         m_rowBgColorHover      = C'50,50,80';
+         m_paginationBtnBgColor     = C'70,70,120';
+         m_paginationBtnBorderColor = C'100,100,160';
 
-   } else if (m_currentTheme == THEME_LIGHT)
-   {
-      m_headerTextColor = clrWhite;
-      m_headerBgColor   = C'70,130,180';
-      m_textColorBase = C'60,60,80';
-      m_contentBtnBgColor = C'30,144,255';
-      m_cellBorderColor     = C'210,210,220';
-      m_rowBgColorOdd  = clrWhite;
-      m_rowBgColorEven   = C'248,248,252';
-      m_rowBgColorHover      = C'235,240,255';
-      m_paginationBtnBgColor     = C'100,149,237';
-      m_paginationBtnBorderColor = C'150,200,255';
-   }
+      } else if (m_currentTheme == THEME_LIGHT)
+      {
+         m_headerTextColor = clrWhite;
+         m_headerBgColor   = C'70,130,180';
+         m_textColorBase = C'60,60,80';
+         m_contentBtnBgColor = C'30,144,255';
+         m_cellBorderColor     = C'210,210,220';
+         m_rowBgColorOdd  = clrWhite;
+         m_rowBgColorEven   = C'248,248,252';
+         m_rowBgColorHover      = C'235,240,255';
+         m_paginationBtnBgColor     = C'100,149,237';
+         m_paginationBtnBorderColor = C'150,200,255';
+      }
       // clang-format on
 
       m_fontName = "Arial";
@@ -180,6 +177,7 @@ class UITable {
 
       ChartSetInteger(m_chartId, CHART_EVENT_MOUSE_MOVE, true);
    };
+
    void TableDestroy();
    int  GetWidth() {
       int with = 0;
@@ -388,14 +386,16 @@ class UITable {
    };
 
    void StartRedrawChart() { ChartRedraw(m_chartId); };
-   void StartDrawContent();
+   void StartDraw(int x, int y);
    void HandleClickBtnPaginationPrevious();
    void HandleClickBtnPaginationNext();
    void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
    void OnMQLTesterEvent();
 };
 
-void UITable::StartDrawContent() {
+void UITable::StartDraw(int x, int y) {
+   m_x = x;
+   m_y = y;
    CreateHeaders();
    CreateCells();
    CreatePagination();

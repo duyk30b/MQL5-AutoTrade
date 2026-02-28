@@ -7,14 +7,11 @@
 #property copyright "UIInputNumber Library"
 #property version "1.00"
 
+#include <AutoTrade/UI/UIDefines.mqh>
+
 //+------------------------------------------------------------------+
 //| Class UIInputNumber                                              |
 //+------------------------------------------------------------------+
-enum UI_INPUT_NUMBER_CHANGE_TYPE {
-   UI_INPUT_NUMBER_CHANGE_VALUE // Change value của input
-};
-
-typedef void (*FOnChange)(void *context, UI_INPUT_NUMBER_CHANGE_TYPE type, double value);
 
 class UIInputNumberListener {
  public:
@@ -42,7 +39,10 @@ class UIInputNumber {
    double                 m_maxValue;  // Giá trị max
    double                 m_stepSetting;
    int                    m_digitsSetting;
+
    bool                   m_isDisabled;
+   bool                   m_isTester;    // Có đang chạy ở môi trường tester không
+
    bool                   m_isOpenPopup; // Có hiển thị popup setting không
 
    // Kích thước các thành phần
@@ -88,27 +88,24 @@ class UIInputNumber {
       m_context  = ctx;
    }
 
-   void Initialization(long chartId, string name, int x, int y, int width = 100, int height = 35) {
-      m_chartId         = chartId;
-      m_name            = name;
-      m_x               = x;
-      m_y               = y;
-      m_width           = width;
-      m_height          = height;
-      m_fontSize        = 10;
-      m_value           = 0;
-      m_labelText       = "";
-      m_step            = 1.0;
-      m_digits          = 2;
-      m_minValue        = -DBL_MAX;
-      m_maxValue        = DBL_MAX;
-      m_isDisabled      = false;
-      m_isOpenPopup     = false;
+   void Initialization(long chartId, string name) {
+      m_chartId     = chartId;
+      m_name        = name;
+      m_fontSize    = 10;
+      m_value       = 0;
+      m_labelText   = "";
+      m_step        = 1.0;
+      m_digits      = 2;
+      m_minValue    = -DBL_MAX;
+      m_maxValue    = DBL_MAX;
+      m_isDisabled  = false;
+      m_isOpenPopup = false;
 
-      m_labelHeight     = 18;
-      m_inputHeight     = height - m_labelHeight;
-      m_buttonWidth     = 30;
-      m_inputWidth      = width - 2 * m_buttonWidth;
+      if((bool)MQLInfoInteger(MQL_TESTER) || (bool)MQLInfoInteger(MQL_VISUAL_MODE)) {
+         m_isTester = true;
+      } else {
+         m_isTester = false;
+      }
 
       m_labelTextColor  = clrBlack;
       m_buttonTextColor = clrBlack;
@@ -144,13 +141,14 @@ class UIInputNumber {
    double GetStep() { return m_step; }
    double GetDigits() { return m_digits; }
    string GetName() { return m_name; }
-   void   GetObjectNameList(string &objNameList[]) {
+   int    GetObjectNameList(string &objNameList[]) {
       ArrayResize(objNameList, 5);
       objNameList[0] = m_labelName;
       objNameList[1] = m_btnMinusName;
       objNameList[2] = m_inputName;
       objNameList[3] = m_btnPlusName;
       objNameList[4] = m_btnSettingName;
+      return 5;
    }
 
    // Setters
@@ -163,39 +161,8 @@ class UIInputNumber {
       }
    }
    void SetFontSize(int size) { m_fontSize = size; }
-   void SetValue(double value) {
-      if(value != m_value) {
-         if(value < m_minValue)
-            m_value = m_minValue;
-         else if(value > m_maxValue)
-            m_value = m_maxValue;
-         else
-            m_value = NormalizeDouble(value, m_digits);
-         string text = DoubleToString(m_value, m_digits);
-         ObjectSetString(m_chartId, m_inputName, OBJPROP_TEXT, text);
-         if(m_listener != NULL) {
-            m_listener.onChangeValue(m_value);
-         }
-         if(m_callback != NULL) {
-            m_callback(m_context, UI_INPUT_NUMBER_CHANGE_VALUE, m_value);
-         }
-         ChartRedraw();
-      }
-   }
-   void SetDisabled(bool isDisabled) {
-      m_isDisabled = isDisabled;
-      if(m_isDisabled) {
-         ObjectSetInteger(m_chartId, m_btnMinusName, OBJPROP_COLOR, clrDarkGray);
-         ObjectSetInteger(m_chartId, m_btnPlusName, OBJPROP_COLOR, clrDarkGray);
-         ObjectSetInteger(m_chartId, m_inputName, OBJPROP_COLOR, clrDarkGray);
-         ObjectSetInteger(m_chartId, m_btnSettingName, OBJPROP_COLOR, clrDarkGray);
-      } else {
-         ObjectSetInteger(m_chartId, m_btnMinusName, OBJPROP_COLOR, m_buttonTextColor);
-         ObjectSetInteger(m_chartId, m_btnPlusName, OBJPROP_COLOR, m_buttonTextColor);
-         ObjectSetInteger(m_chartId, m_inputName, OBJPROP_COLOR, clrBlack);
-         ObjectSetInteger(m_chartId, m_btnSettingName, OBJPROP_COLOR, m_buttonTextColor);
-      }
-   }
+   void SetValue(double value) { m_value = value; }
+   void SetDisabled(bool isDisabled) { m_isDisabled = isDisabled; }
    void SetStep(double step) { m_step = step; }
    void SetMinValue(double min) { m_minValue = min; }
    void SetMaxValue(double max) { m_maxValue = max; }
@@ -239,9 +206,59 @@ class UIInputNumber {
       );
    }
 
-   void StartDrawContent();
-   void StartOpenPopup();
-   void StartClosePopup();
+   void UpdateValue(double value) {
+      if(value != m_value) {
+         if(value < m_minValue)
+            m_value = m_minValue;
+         else if(value > m_maxValue)
+            m_value = m_maxValue;
+         else
+            m_value = NormalizeDouble(value, m_digits);
+         string text = DoubleToString(m_value, m_digits);
+         ObjectSetString(m_chartId, m_inputName, OBJPROP_TEXT, text);
+      }
+   }
+
+   void UpdateDisabled(bool isDisabled) {
+      m_isDisabled = isDisabled;
+      ObjectSetInteger(
+         m_chartId,
+         m_inputName,
+         OBJPROP_READONLY,
+         m_isTester || m_isDisabled
+      ); // Nếu đang ở tester hoặc bị disable thì input readonly
+
+      if(m_isDisabled) {
+         ObjectSetInteger(m_chartId, m_btnMinusName, OBJPROP_COLOR, clrDarkGray);
+         ObjectSetInteger(m_chartId, m_btnPlusName, OBJPROP_COLOR, clrDarkGray);
+         ObjectSetInteger(m_chartId, m_inputName, OBJPROP_COLOR, clrDarkGray);
+         ObjectSetInteger(m_chartId, m_btnSettingName, OBJPROP_COLOR, clrDarkGray);
+      } else {
+         ObjectSetInteger(m_chartId, m_btnMinusName, OBJPROP_COLOR, m_buttonTextColor);
+         ObjectSetInteger(m_chartId, m_btnPlusName, OBJPROP_COLOR, m_buttonTextColor);
+         ObjectSetInteger(m_chartId, m_inputName, OBJPROP_COLOR, clrBlack);
+         ObjectSetInteger(m_chartId, m_btnSettingName, OBJPROP_COLOR, m_buttonTextColor);
+      }
+   }
+
+   void UpdateLabel(string text, color labelTextColor = clrNONE) {
+      m_labelText = text;
+      ObjectSetString(m_chartId, m_labelName, OBJPROP_TEXT, m_labelText);
+
+      if(labelTextColor != clrNONE) {
+         m_labelTextColor = labelTextColor;
+         ObjectSetInteger(m_chartId, m_labelName, OBJPROP_COLOR, m_labelTextColor);
+      }
+   }
+
+   void OnChangeValue() {
+      if(m_listener != NULL) {
+         m_listener.onChangeValue(m_value);
+      }
+      if(m_callback != NULL) {
+         m_callback(m_context, UI_EVENT_CHANGE_VALUE, m_value);
+      }
+   }
 
    // Xóa control
    void Destroy() {
@@ -266,6 +283,11 @@ class UIInputNumber {
    }
    void InputRedrawChart() { ChartRedraw(m_chartId); }
 
+   void StartDraw(int x, int y, int width, int height);
+
+   void StartOpenPopup();
+   void StartClosePopup();
+
    // Xử lý sự kiện click
    void ClickBtnMinus();
    void ClickBtnPlus();
@@ -288,6 +310,45 @@ class UIInputNumber {
 
    void StartDrawPopupSetting();
 };
+
+void UIInputNumber::StartDraw(int x, int y, int width, int height) {
+   m_x              = x;
+   m_y              = y;
+   m_width          = width;
+   m_height         = height;
+   m_labelHeight    = 18;
+   m_inputHeight    = height - m_labelHeight;
+   m_buttonWidth    = 30;
+   m_inputWidth     = width - 2 * m_buttonWidth;
+
+   int xOffsetPanel = m_x;
+   int yOffsetPanel = m_y;
+
+   // Create button setting (⚙)
+   CreateButton(m_btnSettingName, xOffsetPanel, yOffsetPanel + 3, 10, 10, "[≡]");
+   ObjectSetInteger(m_chartId, m_btnSettingName, OBJPROP_FONTSIZE, 8);
+
+   // Create label
+   CreateLabel(m_labelName, xOffsetPanel + 15, yOffsetPanel, m_labelText);
+   yOffsetPanel += m_labelHeight;
+
+   // Create button giảm (-)
+   CreateButton(m_btnMinusName, xOffsetPanel, yOffsetPanel, m_buttonWidth, m_inputHeight, "-");
+   xOffsetPanel += m_buttonWidth;
+
+   // Create ô input
+   CreateInput(m_inputName, xOffsetPanel, yOffsetPanel, m_inputWidth, m_inputHeight);
+   ObjectSetInteger(m_chartId, m_inputName, OBJPROP_READONLY, m_isTester || m_isDisabled);
+
+   ObjectSetString(m_chartId, m_inputName, OBJPROP_TEXT, DoubleToString(m_value, m_digits));
+   xOffsetPanel += m_inputWidth;
+
+   // Create button tăng (+)
+   CreateButton(m_btnPlusName, xOffsetPanel, yOffsetPanel, m_buttonWidth, m_inputHeight, "+");
+
+   StartDrawPopupSetting();
+   StartClosePopup();
+}
 
 void UIInputNumber::CreateButton(string name, int x, int y, int width, int height, string text) {
    ObjectCreate(m_chartId, name, OBJ_BUTTON, 0, 0, 0);
@@ -369,45 +430,18 @@ void UIInputNumber::CreateRectangle(
    ObjectSetInteger(m_chartId, name, OBJPROP_HIDDEN, true);
 }
 
-void UIInputNumber::StartDrawContent() {
-   int xOffsetPanel = m_x;
-   int yOffsetPanel = m_y;
-
-   // Create button setting (⚙)
-   CreateButton(m_btnSettingName, xOffsetPanel, yOffsetPanel + 3, 10, 10, "[≡]");
-   ObjectSetInteger(m_chartId, m_btnSettingName, OBJPROP_FONTSIZE, 8);
-
-   // Create label
-   CreateLabel(m_labelName, xOffsetPanel + 15, yOffsetPanel, m_labelText);
-   yOffsetPanel += m_labelHeight;
-
-   // Create button giảm (-)
-   CreateButton(m_btnMinusName, xOffsetPanel, yOffsetPanel, m_buttonWidth, m_inputHeight, "-");
-   xOffsetPanel += m_buttonWidth;
-
-   // Create ô input
-   CreateInput(m_inputName, xOffsetPanel, yOffsetPanel, m_inputWidth, m_inputHeight);
-   ObjectSetString(m_chartId, m_inputName, OBJPROP_TEXT, DoubleToString(m_value, m_digits));
-   xOffsetPanel += m_inputWidth;
-
-   // Create button tăng (+)
-   CreateButton(m_btnPlusName, xOffsetPanel, yOffsetPanel, m_buttonWidth, m_inputHeight, "+");
-
-   StartDrawPopupSetting();
-   StartClosePopup();
-}
-
 void UIInputNumber::StartDrawPopupSetting() {
-   int popupWidth  = 220;
-   int popupHeight = 230;
-   int popupX      = m_x;
+   int popupWidth      = 220;
+   int popupHeight     = 230;
+   int popupX          = m_x;
+   int inputPopupWidth = 120;
    // Mặc định hiển thị popup ở trên input, nếu không đủ chỗ thì hiển thị ở dưới
    int popupY = m_y - popupHeight;
    if(popupY < 10) {
       popupY = m_y + m_height + 2;
    }
 
-   int xPos = popupX + (popupWidth - m_buttonWidth * 2 - m_inputWidth) / 2;
+   int xPos = popupX + (popupWidth - m_buttonWidth * 2 - inputPopupWidth) / 2;
 
    // POPUP: Tạo background
    CreateRectangle(m_popupBgName, popupX, popupY, popupWidth, popupHeight, clrWhiteSmoke);
@@ -437,8 +471,14 @@ void UIInputNumber::StartDrawPopupSetting() {
       m_popupInputDigitsName,
       xPos + m_buttonWidth,
       popupY + 65,
-      m_inputWidth,
+      inputPopupWidth,
       m_inputHeight
+   );
+   ObjectSetInteger(
+      m_chartId,
+      m_popupInputDigitsName,
+      OBJPROP_READONLY,
+      m_isTester || m_isDisabled
    );
    ObjectSetString(
       m_chartId,
@@ -451,7 +491,7 @@ void UIInputNumber::StartDrawPopupSetting() {
    // POPUP: Create button digits tăng (+)
    CreateButton(
       m_popupBtnIncreaseDigitsName,
-      xPos + m_buttonWidth + m_inputWidth,
+      xPos + m_buttonWidth + inputPopupWidth,
       popupY + 65,
       m_buttonWidth,
       m_inputHeight,
@@ -462,7 +502,7 @@ void UIInputNumber::StartDrawPopupSetting() {
       m_chartId,
       m_popupBtnIncreaseDigitsName,
       OBJPROP_XDISTANCE,
-      xPos + m_buttonWidth + m_inputWidth
+      xPos + m_buttonWidth + inputPopupWidth
    );
    ObjectSetInteger(m_chartId, m_popupBtnIncreaseDigitsName, OBJPROP_ZORDER, 1002);
 
@@ -479,15 +519,21 @@ void UIInputNumber::StartDrawPopupSetting() {
       m_popupInputStepName,
       xPos + m_buttonWidth,
       popupY + 130,
-      m_inputWidth,
+      inputPopupWidth,
       m_inputHeight
+   );
+   ObjectSetInteger(
+      m_chartId,
+      m_popupInputDigitsName,
+      OBJPROP_READONLY,
+      m_isTester || m_isDisabled
    );
    ObjectSetInteger(m_chartId, m_popupInputStepName, OBJPROP_ZORDER, 1002);
 
    // POPUP: Create button step tăng (+)
    CreateButton(
       m_popupBtnIncreaseStepName,
-      xPos + m_buttonWidth + m_inputWidth,
+      xPos + m_buttonWidth + inputPopupWidth,
       popupY + 130,
       m_buttonWidth,
       m_inputHeight,
@@ -495,7 +541,7 @@ void UIInputNumber::StartDrawPopupSetting() {
    );
    ObjectSetInteger(m_chartId, m_popupBtnIncreaseStepName, OBJPROP_ZORDER, 1002);
 
-   int btnProcessWidth = (m_inputWidth + m_buttonWidth * 2) / 2 - 5;
+   int btnProcessWidth = (inputPopupWidth + m_buttonWidth * 2) / 2 - 5;
 
    // POPUP: Create button Cancel
    // Chú ý: Đặt button Cancel trước để nó nằm bên trái button OK, tạo cảm giác cân đối hơn khi hiển
@@ -576,41 +622,51 @@ void UIInputNumber::ClickBtnSetting() {
 }
 
 void UIInputNumber::ClickBtnMinus() {
-   ObjectSetInteger(m_chartId, m_btnMinusName, OBJPROP_STATE, false);
    if(!m_isDisabled) {
-      SetValue(m_value - m_step);
+      UpdateValue(m_value - m_step);
+      OnChangeValue();
+      ChartRedraw();
    }
+   Sleep(100);
+   ObjectSetInteger(m_chartId, m_btnMinusName, OBJPROP_STATE, false);
 }
 
 void UIInputNumber::ClickBtnPlus() {
-   ObjectSetInteger(m_chartId, m_btnPlusName, OBJPROP_STATE, false);
    if(!m_isDisabled) {
-      SetValue(m_value + m_step);
+      UpdateValue(m_value + m_step);
+      OnChangeValue();
+      ChartRedraw();
    }
+   Sleep(100);
+   ObjectSetInteger(m_chartId, m_btnPlusName, OBJPROP_STATE, false);
 }
 
 void UIInputNumber::ClickPopupBtnDigitsIncrease() {
-   ObjectSetInteger(m_chartId, m_popupBtnIncreaseDigitsName, OBJPROP_STATE, false);
    SetDigitsSetting(m_digitsSetting + 1);
    InputRedrawChart();
+   Sleep(100);
+   ObjectSetInteger(m_chartId, m_popupBtnIncreaseDigitsName, OBJPROP_STATE, false);
 }
 
 void UIInputNumber::ClickPopupBtnDigitsDecrease() {
-   ObjectSetInteger(m_chartId, m_popupBtnDecreaseDigitsName, OBJPROP_STATE, false);
    SetDigitsSetting(m_digitsSetting - 1);
    InputRedrawChart();
+   Sleep(100);
+   ObjectSetInteger(m_chartId, m_popupBtnDecreaseDigitsName, OBJPROP_STATE, false);
 }
 
 void UIInputNumber::ClickPopupBtnStepIncrease() {
-   ObjectSetInteger(m_chartId, m_popupBtnIncreaseStepName, OBJPROP_STATE, false);
    SetStepSetting(m_stepSetting * 10);
    InputRedrawChart();
+   Sleep(100);
+   ObjectSetInteger(m_chartId, m_popupBtnIncreaseStepName, OBJPROP_STATE, false);
 }
 void UIInputNumber::ClickPopupBtnStepDecrease() {
-   ObjectSetInteger(m_chartId, m_popupBtnDecreaseStepName, OBJPROP_STATE, false);
    int oldPower = (int)MathRound(MathLog10(m_stepSetting));
    SetStepSetting(MathPow(10, oldPower - 1));
    InputRedrawChart();
+   Sleep(100);
+   ObjectSetInteger(m_chartId, m_popupBtnDecreaseStepName, OBJPROP_STATE, false);
 }
 void UIInputNumber::ClickPopupBtnOk() {
    ObjectSetInteger(m_chartId, m_popupBtnOkName, OBJPROP_STATE, false);
@@ -667,6 +723,7 @@ void UIInputNumber::OnChartEvent(
          string text     = ObjectGetString(m_chartId, m_inputName, OBJPROP_TEXT);
          double newValue = StringToDouble(text);
          SetValue(newValue);
+         OnChangeValue();
       }
    }
 }
