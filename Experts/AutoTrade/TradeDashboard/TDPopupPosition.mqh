@@ -79,16 +79,16 @@ class TDPopupPosition : public PopupPositionListener {
       m_popupPanelListener.SetPopupPosition(&this);
       m_popupCheckboxTSListener.SetPopupPosition(&this);
 
-      m_ipStopLossPoints.setCallback(&this, TDPopupPosition::OnChangeStopLossPoints);
-      m_ipStopLossPrice.setCallback(&this, TDPopupPosition::OnChangeStopLossPrice);
-      m_ipTakeProfitPoints.setCallback(&this, TDPopupPosition::OnChangeTakeProfitPoints);
-      m_ipTakeProfitPrice.setCallback(&this, TDPopupPosition::OnChangeTakeProfitPrice);
-      m_ipTSStartPoints.setCallback(&this, TDPopupPosition::OnChangeTSStartPoints);
-      m_ipTSStartPrice.setCallback(&this, TDPopupPosition::OnChangeTSStartPrice);
-      m_ipTSStepPoints.setCallback(&this, TDPopupPosition::OnChangeTSStepPoints);
-      m_ipTSStepPrice.setCallback(&this, TDPopupPosition::OnChangeTSStepPrice);
-      m_ipTSDistancePoints.setCallback(&this, TDPopupPosition::OnChangeTSDistancePoints);
-      m_ipTSDistancePrice.setCallback(&this, TDPopupPosition::OnChangeTSDistancePrice);
+      m_ipStopLossPoints.SetCallback(&this, TDPopupPosition::OnChangeStopLossPoints);
+      m_ipStopLossPrice.SetCallback(&this, TDPopupPosition::OnChangeStopLossPrice);
+      m_ipTakeProfitPoints.SetCallback(&this, TDPopupPosition::OnChangeTakeProfitPoints);
+      m_ipTakeProfitPrice.SetCallback(&this, TDPopupPosition::OnChangeTakeProfitPrice);
+      m_ipTSStartPoints.SetCallback(&this, TDPopupPosition::OnChangeTSStartPoints);
+      m_ipTSStartPrice.SetCallback(&this, TDPopupPosition::OnChangeTSStartPrice);
+      m_ipTSStepPoints.SetCallback(&this, TDPopupPosition::OnChangeTSStepPoints);
+      m_ipTSStepPrice.SetCallback(&this, TDPopupPosition::OnChangeTSStepPrice);
+      m_ipTSDistancePoints.SetCallback(&this, TDPopupPosition::OnChangeTSDistancePoints);
+      m_ipTSDistancePrice.SetCallback(&this, TDPopupPosition::OnChangeTSDistancePrice);
 
       m_cbTrailingStopEnable.SetListener(&m_popupCheckboxTSListener);
 

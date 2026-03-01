@@ -83,7 +83,7 @@ class UIInputNumber {
    ~UIInputNumber() { Destroy(); }
 
    void SetListener(UIInputNumberListener *listener) { m_listener = listener; };
-   void setCallback(void *ctx, FOnChange cb) {
+   void SetCallback(void *ctx, FOnChange cb) {
       m_callback = cb;
       m_context  = ctx;
    }

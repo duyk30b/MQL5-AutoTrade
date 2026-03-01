@@ -29,7 +29,7 @@ class TDTabSetting {
  public:
    void Initialization() {
       m_irVolumeTypeGroup.SetCallback(&this, OnChangeIpRadioVolumeType);
-      m_ipVolumeValue.setCallback(&this, OnChangeIpVolumeValue);
+      m_ipVolumeValue.SetCallback(&this, OnChangeIpVolumeValue);
 
       m_irVolumeTypeGroup.AddInputRadio(&m_irVolumeTypeInput);
       m_irVolumeTypeGroup.AddInputRadio(&m_irVolumeTypeMoney);

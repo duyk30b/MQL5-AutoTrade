@@ -25,9 +25,6 @@ UICommon        uiCommon;
 TDContainer     tdContainer;
 TDPopupPosition tdPopupPosition;
 
-input ulong     MagicNumber                 = 20260206;
-input int       Slippage                    = 5;
-
 input int       g_slPointsDefault           = 500;
 input int       g_tpPointsDefault           = 1000;
 input bool      g_enableTrailingStopDefault = true;
@@ -62,7 +59,7 @@ int OnInit() {
       }
    }
 
-   if(!tdContainer.Create(20, 20, 500, 500)) {
+   if(!tdContainer.Create(20, 20, 500, 560)) {
       Print("Không thể tạo Panel!");
       return INIT_FAILED;
    }
@@ -76,6 +73,7 @@ int OnInit() {
    tdPopupPosition.Initialization();
    tdPopupPosition.StartDraw(520, 20, 300, 390, false);
    Print("Create Panel Success!");
+
    return (INIT_SUCCEEDED);
 }
 
@@ -113,6 +111,67 @@ void OnTimer() {
 void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam) {
    tdContainer.OnChartEvent(id, lparam, dparam, sparam);
    tdPopupPosition.OnChartEvent(id, lparam, dparam, sparam);
+}
+
+void OnTradeTransaction(
+   const MqlTradeTransaction &trans, const MqlTradeRequest &request, const MqlTradeResult &result
+) {
+   ENUM_TRADE_TRANSACTION_TYPE type           = trans.type;
+   ulong                       ticketOrder    = trans.order;    // ORDER ticket
+   ulong                       ticketPosition = trans.position; // POSITION ticket
+   ulong                       ticketDeal     = trans.deal;
+
+   switch(type) {
+      case TRADE_TRANSACTION_ORDER_ADD:
+         // thường không cần xử lý vì đã lưu lúc tạo lệnh bằng cTrade
+         break;
+      case TRADE_TRANSACTION_ORDER_DELETE:
+         // không xử lý trường hợp này, vì khi hủy lệnh pending, sẽ có 1 deal đóng
+         // (DEAL_ENTRY_OUT_BY) để đóng lệnh pending đó, nên sẽ xử lý ở case
+         // TRADE_TRANSACTION_DEAL_ADD bên dưới
+         break;
+      case TRADE_TRANSACTION_DEAL_ADD:
+         if(HistoryDealSelect(ticketDeal)) {
+            ENUM_DEAL_ENTRY dealEntry
+               = (ENUM_DEAL_ENTRY)HistoryDealGetInteger(ticketDeal, DEAL_ENTRY);
+            if(dealEntry == DEAL_ENTRY_IN) {
+               // Mở mới 1 position, cập nhật ticket position cho grid tương ứng với ticket order
+               int idx = FindIndexGridByTicketOrder(ticketOrder);
+               if(idx != -1) {
+                  PositionSelectByTicket(ticketPosition);
+                  g_gridList[idx].ticketPosition = ticketPosition;
+                  g_gridList[idx].ticketDealOpen = ticketDeal;
+                  g_gridList[idx].gridState      = GRID_STATE_POSITION;
+                  g_gridList[idx].positionType
+                     = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+               }
+
+            } else if(dealEntry == DEAL_ENTRY_OUT || dealEntry == DEAL_ENTRY_OUT_BY) {
+               // Đóng 1 position, cập nhật ticket deal đóng cho grid tương ứng với ticket position
+               // Không tìm theo ticket order, vì có thể lệnh bị đóng bởi 1 lệnh khác
+               // (DEAL_ENTRY_OUT_BY), nên không còn liên kết với ticket order ban đầu nữa
+               int idx = FindIndexGridByTicketPosition(ticketPosition);
+               if(idx != -1) {
+                  g_gridList[idx].ticketDealClose = ticketDeal;
+                  g_gridList[idx].gridState       = GRID_STATE_CLOSED;
+                  g_gridList[idx].profit          = HistoryDealGetDouble(ticketDeal, DEAL_PROFIT);
+                  g_gridList[idx].closePrice      = HistoryDealGetDouble(ticketDeal, DEAL_PRICE);
+                  g_gridList[idx].symbol          = HistoryDealGetString(ticketDeal, DEAL_SYMBOL);
+                  g_gridList[idx].volume          = HistoryDealGetDouble(ticketDeal, DEAL_VOLUME);
+                  g_gridList[idx].stopLossPrice   = HistoryDealGetDouble(ticketDeal, DEAL_SL);
+                  g_gridList[idx].takeProfitPrice = HistoryDealGetDouble(ticketDeal, DEAL_TP);
+
+                  // g_gridList[idx].closeTime       = HistoryDealGetInteger(ticketDeal, DEAL_TIME);
+               }
+
+            } else if(dealEntry == DEAL_ENTRY_INOUT) {
+               // Position đảo chiều, coi như đóng lệnh cũ và mở lệnh mới // Xử lý sau
+            }
+         }
+
+         break;
+      default: break;
+   }
 }
 
 void OnMQLTesterEvent() {

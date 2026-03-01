@@ -1,3 +1,4 @@
+#include "TDTabGrid.mqh"
 #include "TDTabSetting.mqh"
 #include "TDTabTrade.mqh"
 #include "TDTablePositions.mqh"
@@ -8,8 +9,9 @@
 #include <AutoTrade/UI/UIPanel.mqh>
 
 enum TDTabType {
-   TD_TAB_TRADE,  // Tab Trade
-   TD_TAB_SETTING // Tab Setting
+   TD_TAB_TRADE,   // Tab Trade
+   TD_TAB_SETTING, // Tab Setting
+   TD_TAB_GRID     // Tab Grid
 };
 
 class TDContainerListener {
@@ -35,6 +37,7 @@ class TDContainer : public TDContainerListener {
    UIPanel                m_uiPanelContainer;
    TDTabTrade             m_tdTabTrade;
    TDTabSetting           m_tdTabSetting;
+   TDTabGrid              m_tdTabGrid;
 
    int                    m_x;
    int                    m_y;
@@ -45,11 +48,16 @@ class TDContainer : public TDContainerListener {
 
    string                 m_ObjNewsName;
    string                 m_ObjTabMenuTradeName;
+   string                 m_ObjTabMenuGridName;
    string                 m_ObjTabMenuSettingName;
 
    bool                   Create(int x, int y, int width, int height) {
       Initialization();
       StartDraw(x, y, width, height);
+
+      m_uiPanelContainer.AddPanelChildName(m_ObjTabMenuTradeName);
+      m_uiPanelContainer.AddPanelChildName(m_ObjTabMenuGridName);
+      m_uiPanelContainer.AddPanelChildName(m_ObjTabMenuSettingName);
 
       string tdTabTradeObjNameList[];
       int    countTdTabTradeObjName = m_tdTabTrade.GetObjectNameList(tdTabTradeObjNameList);
@@ -61,6 +69,12 @@ class TDContainer : public TDContainerListener {
       int    countTdTabSettingObjName = m_tdTabSetting.GetObjectNameList(tdTabSettingObjNameList);
       for(int i = 0; i < countTdTabSettingObjName; i++) {
          m_uiPanelContainer.AddPanelChildName(tdTabSettingObjNameList[i]);
+      }
+
+      string tdTabGridObjNameList[];
+      int    countTdTabGridObjName = m_tdTabGrid.GetObjectNameList(tdTabGridObjNameList);
+      for(int i = 0; i < countTdTabGridObjName; i++) {
+         m_uiPanelContainer.AddPanelChildName(tdTabGridObjNameList[i]);
       }
 
       m_uiPanelContainer.PanelRefreshPosition();
@@ -76,12 +90,13 @@ class TDContainer : public TDContainerListener {
       m_ObjNewsName           = "M_ObjNewsName";
       m_ObjTabMenuTradeName   = "M_ObjTabMenuTradeName";
       m_ObjTabMenuSettingName = "M_ObjTabMenuSettingName";
-
+      m_ObjTabMenuGridName    = "M_ObjTabMenuGridName";
       m_uiPanelContainer.Initialization(g_chartId, "TradingPanel");
       m_uiPanelContainer.SetHeaderTitle("Trade Dashboard");
 
       m_tdTabTrade.Initialization();
       m_tdTabSetting.Initialization();
+      m_tdTabGrid.Initialization();
    }
 
    virtual void onIsMinimizedPanelChange(bool _isMinimized) override {
@@ -92,6 +107,7 @@ class TDContainer : public TDContainerListener {
    void RefreshData();
    void ClickTabMenuTrade();
    void ClickTabMenuSetting();
+   void ClickTabMenuGrid();
    void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
    void OnMQLTesterRefresh();
    void OnMQLTesterEvent();
@@ -99,7 +115,6 @@ class TDContainer : public TDContainerListener {
 
 void TDContainer::StartDraw(int x, int y, int width, int height) {
    m_x = x;
-   Print("•>[TDContainer.mqh:102]: m_x: ", m_x);
    m_y      = y;
    m_width  = width;
    m_height = height;
@@ -122,7 +137,7 @@ void TDContainer::StartDraw(int x, int y, int width, int height) {
       g_chartId,
       m_ObjTabMenuTradeName,
       "Trade",
-      m_x + m_width - 140,
+      m_x + m_width - 210,
       m_y + yOffsetPanel + 6,
       60,
       20,
@@ -131,7 +146,20 @@ void TDContainer::StartDraw(int x, int y, int width, int height) {
       clrDarkGray
    );
    uiCommon.setZOrder(g_chartId, m_ObjTabMenuTradeName, 100);
-   m_uiPanelContainer.AddPanelChildName(m_ObjTabMenuTradeName);
+   uiCommon.CreateButton(
+      g_chartId,
+      m_ObjTabMenuGridName,
+      "Grid",
+      m_x + m_width - 140,
+      m_y + yOffsetPanel + 6,
+      60,
+      20,
+      clrWhite,
+      clrGray,
+      clrDarkGray
+   );
+   uiCommon.setZOrder(g_chartId, m_ObjTabMenuGridName, 100);
+
    uiCommon.CreateButton(
       g_chartId,
       m_ObjTabMenuSettingName,
@@ -145,20 +173,26 @@ void TDContainer::StartDraw(int x, int y, int width, int height) {
       clrDarkGray
    );
    uiCommon.setZOrder(g_chartId, m_ObjTabMenuSettingName, 100);
-   m_uiPanelContainer.AddPanelChildName(m_ObjTabMenuSettingName);
 
    yOffsetPanel = yOffsetPanel + 30; // 30 is distance from header to tab content
 
    if(m_currentTab == TD_TAB_TRADE) {
       m_tdTabTrade.StartDraw(m_x, m_y + yOffsetPanel, m_width, m_height - yOffsetPanel);
-   } else {
+   } else if(m_currentTab == TD_TAB_SETTING) {
       m_tdTabSetting.StartDraw(m_x, m_y + yOffsetPanel, m_width, m_height - yOffsetPanel);
+   } else if(m_currentTab == TD_TAB_GRID) {
+      m_tdTabGrid.StartDraw(m_x, m_y + yOffsetPanel, m_width, m_height - yOffsetPanel);
    }
 }
 
 void TDContainer::RefreshData() {
-   m_tdTabTrade.RefreshData();
-   m_tdTabSetting.RefreshData();
+   if(m_currentTab == TD_TAB_TRADE) {
+      m_tdTabTrade.RefreshData();
+   } else if(m_currentTab == TD_TAB_SETTING) {
+      m_tdTabSetting.RefreshData();
+   } else if(m_currentTab == TD_TAB_GRID) {
+      m_tdTabGrid.RefreshData();
+   }
 }
 
 void TDContainer::ClickTabMenuTrade() {
@@ -169,6 +203,7 @@ void TDContainer::ClickTabMenuTrade() {
          = m_uiPanelContainer.GetHeaderHeight() + 30; // 30 is distance from header to tab content
 
       m_tdTabSetting.DestroyDraw();
+      m_tdTabGrid.DestroyDraw();
       m_tdTabTrade.StartDraw(m_x, m_y + yOffsetPanel, m_width, m_height - yOffsetPanel);
       ChartRedraw(g_chartId);
    }
@@ -181,7 +216,22 @@ void TDContainer::ClickTabMenuSetting() {
          = m_uiPanelContainer.GetHeaderHeight() + 30; // 30 is distance from header to tab content
 
       m_tdTabTrade.DestroyDraw();
+      m_tdTabGrid.DestroyDraw();
       m_tdTabSetting.StartDraw(m_x, m_y + yOffsetPanel, m_width, m_height - yOffsetPanel);
+      ChartRedraw(g_chartId);
+   }
+}
+
+void TDContainer::ClickTabMenuGrid() {
+   ObjectSetInteger(g_chartId, m_ObjTabMenuGridName, OBJPROP_STATE, false);
+   if(m_currentTab != TD_TAB_GRID) {
+      m_currentTab = TD_TAB_GRID;
+      int yOffsetPanel
+         = m_uiPanelContainer.GetHeaderHeight() + 30; // 30 is distance from header to tab content
+
+      m_tdTabTrade.DestroyDraw();
+      m_tdTabSetting.DestroyDraw();
+      m_tdTabGrid.OpenTab(m_x, m_y + yOffsetPanel, m_width, m_height - yOffsetPanel);
       ChartRedraw(g_chartId);
    }
 }
@@ -192,12 +242,14 @@ void TDContainer::OnChartEvent(
    m_uiPanelContainer.OnChartEvent(id, lparam, dparam, sparam);
    m_tdTabTrade.OnChartEvent(id, lparam, dparam, sparam);
    m_tdTabSetting.OnChartEvent(id, lparam, dparam, sparam);
-
+   m_tdTabGrid.OnChartEvent(id, lparam, dparam, sparam);
    if(id == CHARTEVENT_OBJECT_CLICK) {
       if(sparam == m_ObjTabMenuTradeName) {
          ClickTabMenuTrade();
       } else if(sparam == m_ObjTabMenuSettingName) {
          ClickTabMenuSetting();
+      } else if(sparam == m_ObjTabMenuGridName) {
+         ClickTabMenuGrid();
       }
    }
 }
@@ -211,10 +263,15 @@ void TDContainer::OnMQLTesterEvent() {
    m_uiPanelContainer.OnMQLTesterEvent();
    m_tdTabTrade.OnMQLTesterEvent();
    m_tdTabSetting.OnMQLTesterEvent();
+   m_tdTabGrid.OnMQLTesterEvent();
+
    if(uiCommon.getState(g_chartId, m_ObjTabMenuTradeName)) {
       ClickTabMenuTrade();
    }
    if(uiCommon.getState(g_chartId, m_ObjTabMenuSettingName)) {
       ClickTabMenuSetting();
+   }
+   if(uiCommon.getState(g_chartId, m_ObjTabMenuGridName)) {
+      ClickTabMenuGrid();
    }
 }
