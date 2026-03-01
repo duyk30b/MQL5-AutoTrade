@@ -69,7 +69,7 @@ class TDTablePositions : public UITableListener {
       return true;
    }
 
-   virtual void onPageChange(int newPage) override {
+   virtual void onChangePage(int newPage) override {
       m_page = newPage;
       RefreshTicketPositionsData();
    }

@@ -10,6 +10,8 @@
 #property version "1.00"
 #property strict
 
+#include <AutoTrade/UI/UIDefines.mqh>
+
 //+------------------------------------------------------------------+
 //| Enum for table themes                                             |
 //+------------------------------------------------------------------+
@@ -56,13 +58,15 @@ struct TableHeader {
 
 class UITableListener {
  public:
-   virtual void onPageChange(int newPage) = 0;
+   virtual void onChangePage(int newPage) = 0;
    // virtual void onCellButtonClick(int row, int col) = 0;
 };
 
 class UITable {
  private:
    UITableListener *m_listener;
+   FOnChange        m_callback;
+   void            *m_context; // lưu pointer đến object chủ
 
    // Basic properties
    long   m_chartId; // Chart ID
@@ -121,6 +125,10 @@ class UITable {
    ~UITable() { TableDestroy(); };
 
    void SetListener(UITableListener *listener) { m_listener = listener; };
+   void SetCallback(void *ctx, FOnChange cb) {
+      m_callback = cb;
+      m_context  = ctx;
+   }
 
    // Khởi tạo panel
    void Initialization(long chartId, string name, int rows, int cols) {
@@ -140,6 +148,12 @@ class UITable {
       ArrayResize(m_tableRows, rows);
       for(int i = 0; i < rows; i++) {
          ArrayResize(m_tableRows[i].cells, cols);
+         for(int j = 0; j < cols; j++) {
+            m_tableRows[i].cells[j].row      = i;
+            m_tableRows[i].cells[j].col      = j;
+            m_tableRows[i].cells[j].cellType = CELL_TYPE_NONE;
+            m_tableRows[i].cells[j].text     = " ";
+         }
       }
       ArrayResize(m_tableHeader, cols);
 
@@ -384,6 +398,22 @@ class UITable {
          ObjectSetInteger(m_chartId, cellTextName, OBJPROP_COLOR, textColor);
       }
    };
+   void SetCellTextFontFamily(int row, int col, string fontName, int fontSize = -1) {
+      string cellTextName = GetObjectName(OBJ_CELL_CONTENT, row, col);
+      ObjectSetString(m_chartId, cellTextName, OBJPROP_FONT, fontName);
+      if(fontSize != -1) {
+         ObjectSetInteger(m_chartId, cellTextName, OBJPROP_FONTSIZE, fontSize);
+      }
+   };
+
+   void OnChangePage(int page) {
+      if(m_listener != NULL) {
+         m_listener.onChangePage(page);
+      }
+      if(m_callback != NULL) {
+         m_callback(m_context, UI_EVENT_CHANGE_PAGE, page);
+      }
+   }
 
    void StartRedrawChart() { ChartRedraw(m_chartId); };
    void StartDraw(int x, int y);
@@ -697,17 +727,13 @@ void UITable::TableDestroy() {
 void UITable::HandleClickBtnPaginationPrevious() {
    ObjectSetInteger(0, GetObjectName(OBJ_PAGINATION_PREVIOUS_PAGE), OBJPROP_STATE, false);
    if(m_page > 1) {
-      if(m_listener != NULL) {
-         m_listener.onPageChange(m_page - 1);
-      }
+      OnChangePage(m_page - 1);
    }
 };
 void UITable::HandleClickBtnPaginationNext() {
    ObjectSetInteger(0, GetObjectName(OBJ_PAGINATION_NEXT_PAGE), OBJPROP_STATE, false);
    if(m_page < m_pageTotal) {
-      if(m_listener != NULL) {
-         m_listener.onPageChange(m_page + 1);
-      }
+      OnChangePage(m_page + 1);
    }
 };
 

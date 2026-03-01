@@ -2,6 +2,7 @@
 #include "TradeDashboardContext.mqh"
 #include <AutoTrade/UI/UICheckbox.mqh>
 #include <AutoTrade/UI/UIInputNumber.mqh>
+#include <AutoTrade/Utils/UtilNumber.mqh>
 
 class TDTabTradeListener {
  public:
@@ -46,6 +47,8 @@ class TDTabTrade : public TDTabTradeListener {
    UIInputNumber                m_ipTrailingStopStep;
    UIInputNumber                m_ipTrailingStopDistance;
 
+   string                       m_ObjWalletInfoName;
+   string                       m_ObjMarginInfoName;
    string                       m_ObjBtnBuyName;
    string                       m_ObjBtnSellName;
    string                       m_ObjBtnCloseAllName;
@@ -66,13 +69,15 @@ class TDTabTrade : public TDTabTradeListener {
       m_cbTrailingStopEnable.SetListener(&m_checkboxTrailingStopListener);
       m_checkboxTrailingStopListener.SetContainer(&this);
 
-      m_ipLotSize.setCallback(&this, TDTabTrade::OnChangeLotSize);
-      m_ipStopLossPoints.setCallback(&this, TDTabTrade::OnChangeStopLossPoints);
+      m_ipLotSize.SetCallback(&this, TDTabTrade::OnChangeLotSize);
+      m_ipStopLossPoints.SetCallback(&this, TDTabTrade::OnChangeStopLossPoints);
 
-      m_ObjBtnBuyName      = "M_ObjBtnBuyName";
-      m_ObjBtnSellName     = "M_ObjBtnSellName";
-      m_ObjBtnCloseAllName = "M_ObjBtnCloseAllName";
-      m_ObjStatusName      = "M_ObjStatusName";
+      m_ObjWalletInfoName  = "TabTrade_ObjWalletInfoName";
+      m_ObjMarginInfoName  = "TabTrade_ObjMarginInfoName";
+      m_ObjBtnBuyName      = "TabTrade_ObjBtnBuyName";
+      m_ObjBtnSellName     = "TabTrade_ObjBtnSellName";
+      m_ObjBtnCloseAllName = "TabTrade_ObjBtnCloseAllName";
+      m_ObjStatusName      = "TabTrade_ObjStatusName";
 
       // clang-format off
       m_clrBtnBuyBg        = C'0,128,0';       // Green
@@ -168,11 +173,14 @@ class TDTabTrade : public TDTabTradeListener {
 
       ArrayResize(
          objNameList,
-         tableObjCount + ipLotSizeObjCount + ipSlPointsObjCount + ipTpPointsObjCount
+         2 + tableObjCount + ipLotSizeObjCount + ipSlPointsObjCount + ipTpPointsObjCount
             + cbTrailingStopEnableObjCount + ipTrailingStopStartObjCount
             + ipTrailingStopStepObjCount + ipTrailingStopDistanceObjCount + 4
       );
-      int count = 0;
+      int count            = 0;
+      objNameList[count++] = m_ObjWalletInfoName;
+      objNameList[count++] = m_ObjMarginInfoName;
+
       for(int i = 0; i < tableObjCount; i++)
          objNameList[count++] = tableObjNameList[i];
       for(int i = 0; i < ipLotSizeObjCount; i++)
@@ -246,13 +254,39 @@ class TDTabTrade : public TDTabTradeListener {
 };
 
 void TDTabTrade::StartDraw(int x, int y, int width, int height) {
-   m_x      = x;
-   m_y      = y;
-   m_width  = width;
-   m_height = height;
+   m_x              = x;
+   m_y              = y;
+   m_width          = width;
+   m_height         = height;
+   int yOffsetPanel = 0;
 
-   m_tdTablePositions.StartDraw(m_x, m_y);
-   int yOffsetPanel = m_tdTablePositions.GetHeight();
+   // Tạo label hiển thị thông tin tài khoản
+   uiCommon.CreateLabel(
+      g_chartId,
+      m_ObjWalletInfoName,
+      "Wallet Info: -", // Text tạm thời, sẽ được cập nhật trong RefreshData()
+      m_x + 10,
+      m_y + yOffsetPanel,
+      8,
+      clrWhite
+   );
+   uiCommon.setZOrder(g_chartId, m_ObjWalletInfoName, 100);
+   yOffsetPanel += 16;
+
+   uiCommon.CreateLabel(
+      g_chartId,
+      m_ObjMarginInfoName,
+      "Margin Info: -", // Text tạm thời, sẽ được cập nhật trong RefreshData()
+      m_x + 10,
+      m_y + yOffsetPanel,
+      8,
+      clrWhite
+   );
+   uiCommon.setZOrder(g_chartId, m_ObjMarginInfoName, 100);
+   yOffsetPanel += 20;
+
+   m_tdTablePositions.StartDraw(m_x, m_y + yOffsetPanel);
+   yOffsetPanel += m_tdTablePositions.GetHeight();
 
    // Tạo ô nhập Lot Size
    m_ipLotSize.SetLabel("Lot Size:", clrWhite);
@@ -409,14 +443,38 @@ void TDTabTrade::DestroyDraw() {
 }
 
 void TDTabTrade::RefreshData() {
+   double accountBalance    = AccountInfoDouble(ACCOUNT_BALANCE);
+   double accountEquity     = AccountInfoDouble(ACCOUNT_EQUITY);
+   double marginUsed        = AccountInfoDouble(ACCOUNT_MARGIN);
+   double accountMarginFree = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
+   string accountCurrency   = AccountInfoString(ACCOUNT_CURRENCY);
+
    // double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    // double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    SymbolInfoTick(_Symbol, Tick);
-   double bid = Tick.bid;
-   double ask = Tick.ask;
+   double bid        = Tick.bid;
+   double ask        = Tick.ask;
 
-   uiCommon.setText(g_chartId, m_ObjBtnBuyName, "BUY: " + DoubleToString(ask, _Digits));
-   uiCommon.setText(g_chartId, m_ObjBtnSellName, "SELL: " + DoubleToString(bid, _Digits));
+   string walletText = StringFormat(
+      "Balance: %s %s | Equity: %s %s",
+      UtilNumber::FormatNumber(accountBalance, 2),
+      accountCurrency,
+      UtilNumber::FormatNumber(accountEquity, 2),
+      accountCurrency
+   );
+   string marginText = StringFormat(
+      "Margin Used: %s %s | Margin Free: %s %s",
+      UtilNumber::FormatNumber(marginUsed, 2),
+      accountCurrency,
+      UtilNumber::FormatNumber(accountMarginFree, 2),
+      accountCurrency
+   );
+
+   uiCommon.setText(g_chartId, m_ObjWalletInfoName, walletText);
+   uiCommon.setText(g_chartId, m_ObjMarginInfoName, marginText);
+
+   uiCommon.setText(g_chartId, m_ObjBtnBuyName, "BUY: " + UtilNumber::FormatNumber(ask, _Digits));
+   uiCommon.setText(g_chartId, m_ObjBtnSellName, "SELL: " + UtilNumber::FormatNumber(bid, _Digits));
 
    m_tdTablePositions.RefreshTicketPositionsData();
 
@@ -462,7 +520,12 @@ void TDTabTrade::ClickBtnBuy() {
       g_positionList[size].trailingStopDistancePoints = m_ipTrailingStopDistance.GetValue();
 
       Print("✓ Lệnh BUY đã được đặt thành công!");
-      Print("Giá: ", ask, " | Lot: ", lotSize);
+      Print(
+         "Giá: ",
+         UtilNumber::FormatNumber(ask, _Digits),
+         " | Lot: ",
+         UtilNumber::FormatNumber(lotSize, 2)
+      );
 
       // Hiển thị thông báo
       string msg = StringFormat("BUY success: %.5f", ask);
@@ -499,7 +562,12 @@ void TDTabTrade::ClickBtnSell() {
       g_positionList[size].trailingStopDistancePoints = m_ipTrailingStopDistance.GetValue();
 
       Print("✓ Lệnh SELL đã được đặt thành công!");
-      Print("Giá: ", bid, " | Lot: ", lotSize);
+      Print(
+         "Giá: ",
+         UtilNumber::FormatNumber(bid, _Digits),
+         " | Lot: ",
+         UtilNumber::FormatNumber(lotSize, 2)
+      );
 
       // Hiển thị thông báo
       string msg = StringFormat("SELL success: %.5f", bid);
