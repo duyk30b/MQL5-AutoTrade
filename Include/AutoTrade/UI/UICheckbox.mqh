@@ -47,7 +47,7 @@ class UICheckbox {
    bool GetValue() const { return m_value; }
 
    void SetListener(UICheckboxListener *listener) { m_listener = listener; };
-   void setCallback(void *ctx, FOnChange cb) {
+   void SetCallback(void *ctx, FOnChange cb) {
       m_callback = cb;
       m_context  = ctx;
    }
