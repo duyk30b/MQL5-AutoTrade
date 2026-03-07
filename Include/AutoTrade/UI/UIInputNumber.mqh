@@ -88,7 +88,7 @@ class UIInputNumber {
       m_context  = ctx;
    }
 
-   void Initialization(long chartId, string name) {
+   void Initialize(long chartId, string name) {
       m_chartId     = chartId;
       m_name        = name;
       m_fontSize    = 10;
@@ -229,14 +229,14 @@ class UIInputNumber {
       ); // Nếu đang ở tester hoặc bị disable thì input readonly
 
       if(m_isDisabled) {
+         ObjectSetInteger(m_chartId, m_inputName, OBJPROP_COLOR, clrDarkGray);
          ObjectSetInteger(m_chartId, m_btnMinusName, OBJPROP_COLOR, clrDarkGray);
          ObjectSetInteger(m_chartId, m_btnPlusName, OBJPROP_COLOR, clrDarkGray);
-         ObjectSetInteger(m_chartId, m_inputName, OBJPROP_COLOR, clrDarkGray);
          ObjectSetInteger(m_chartId, m_btnSettingName, OBJPROP_COLOR, clrDarkGray);
       } else {
+         ObjectSetInteger(m_chartId, m_inputName, OBJPROP_COLOR, clrBlack);
          ObjectSetInteger(m_chartId, m_btnMinusName, OBJPROP_COLOR, m_buttonTextColor);
          ObjectSetInteger(m_chartId, m_btnPlusName, OBJPROP_COLOR, m_buttonTextColor);
-         ObjectSetInteger(m_chartId, m_inputName, OBJPROP_COLOR, clrBlack);
          ObjectSetInteger(m_chartId, m_btnSettingName, OBJPROP_COLOR, m_buttonTextColor);
       }
    }
@@ -361,7 +361,7 @@ void UIInputNumber::CreateButton(string name, int x, int y, int width, int heigh
    ObjectSetString(m_chartId, name, OBJPROP_TEXT, text);
    ObjectSetString(m_chartId, name, OBJPROP_FONT, "Arial Bold");
    ObjectSetInteger(m_chartId, name, OBJPROP_FONTSIZE, m_fontSize);
-   ObjectSetInteger(m_chartId, name, OBJPROP_COLOR, m_buttonTextColor);
+   ObjectSetInteger(m_chartId, name, OBJPROP_COLOR, m_isDisabled ? clrDarkGray : m_buttonTextColor);
    ObjectSetInteger(m_chartId, name, OBJPROP_BGCOLOR, m_buttonBgColor);
    ObjectSetInteger(m_chartId, name, OBJPROP_BORDER_COLOR, m_borderColor);
 
@@ -399,7 +399,7 @@ void UIInputNumber::CreateInput(string name, int x, int y, int width, int height
    ObjectSetString(m_chartId, name, OBJPROP_FONT, "Arial");
    ObjectSetInteger(m_chartId, name, OBJPROP_FONTSIZE, m_fontSize);
    ObjectSetInteger(m_chartId, name, OBJPROP_ALIGN, ALIGN_CENTER);
-   ObjectSetInteger(m_chartId, name, OBJPROP_COLOR, clrBlack);
+   ObjectSetInteger(m_chartId, name, OBJPROP_COLOR, m_isDisabled ? clrDarkGray : clrBlack);
    ObjectSetInteger(m_chartId, name, OBJPROP_BGCOLOR, clrWhite);
    ObjectSetInteger(m_chartId, name, OBJPROP_BORDER_COLOR, m_borderColor);
    ObjectSetInteger(m_chartId, name, OBJPROP_BORDER_TYPE, BORDER_FLAT);
@@ -408,6 +408,7 @@ void UIInputNumber::CreateInput(string name, int x, int y, int width, int height
    ObjectSetInteger(m_chartId, name, OBJPROP_SELECTED, false);
    ObjectSetInteger(m_chartId, name, OBJPROP_SELECTABLE, false);
    ObjectSetInteger(m_chartId, name, OBJPROP_HIDDEN, true);
+   ObjectSetInteger(m_chartId, m_inputName, OBJPROP_READONLY, m_isTester || m_isDisabled);
 }
 
 void UIInputNumber::CreateRectangle(

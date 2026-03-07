@@ -46,7 +46,7 @@ struct TableCell {
 };
 
 struct TableRow {
-   ulong     data;
+   string    data;
    TableCell cells[];
 };
 
@@ -131,7 +131,7 @@ class UITable {
    }
 
    // Khởi tạo panel
-   void Initialization(long chartId, string name, int rows, int cols) {
+   void Initialize(long chartId, string name, int rows, int cols) {
       m_chartId      = chartId;
       m_name         = name;
 
@@ -383,10 +383,10 @@ class UITable {
       ObjectSetString(0, objPaginationTotalName, OBJPROP_TEXT, totalText);
       ObjectSetString(0, objPaginationPageName, OBJPROP_TEXT, pageText);
    };
-   ulong GetRowData(int row) { return m_tableRows[row].data; };
-   void  SetRowData(int row, ulong data) { m_tableRows[row].data = data; };
+   string GetRowData(int row) { return m_tableRows[row].data; };
+   void   SetRowData(int row, string data) { m_tableRows[row].data = data; };
 
-   void  SetCell(int row, int col, string text, ENUM_CELL_TYPE cellType) {
+   void   SetCell(int row, int col, string text, ENUM_CELL_TYPE cellType) {
       m_tableRows[row].cells[col].text     = text;
       m_tableRows[row].cells[col].cellType = cellType;
       string cellTextName                  = GetObjectName(OBJ_CELL_CONTENT, row, col);
@@ -540,6 +540,8 @@ void UITable::CreateCells() {
             ObjectSetInteger(m_chartId, objCellContentName, OBJPROP_SELECTED, false);
             ObjectSetInteger(m_chartId, objCellContentName, OBJPROP_HIDDEN, true);
             ObjectSetInteger(m_chartId, objCellContentName, OBJPROP_ZORDER, m_zOrderBase + 5);
+            // tạm thời ẩn đi
+            ObjectSetInteger(m_chartId, objCellContentName, OBJPROP_TIMEFRAMES, OBJ_NO_PERIODS);
          }
 
          xOffset += m_tableHeader[col].width;
@@ -722,6 +724,10 @@ void UITable::TableDestroy() {
       }
    }
    StartRedrawChart();
+   ObjectDelete(m_chartId, GetObjectName(OBJ_PAGINATION_TOTAL));
+   ObjectDelete(m_chartId, GetObjectName(OBJ_PAGINATION_PREVIOUS_PAGE));
+   ObjectDelete(m_chartId, GetObjectName(OBJ_PAGINATION_PAGE));
+   ObjectDelete(m_chartId, GetObjectName(OBJ_PAGINATION_NEXT_PAGE));
 }
 
 void UITable::HandleClickBtnPaginationPrevious() {

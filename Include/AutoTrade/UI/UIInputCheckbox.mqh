@@ -1,60 +1,62 @@
 //+------------------------------------------------------------------+
-//|                                                   UICheckbox.mqh |
-//|                               Copyright 2026, UICheckbox Library |
+//|                                                   UIInputCheckbox.mqh |
+//|                               Copyright 2026, UIInputCheckbox Library |
 //|                                                 https://mql5.com |
 //| 16.02.2026 - Initial release                                     |
 //+------------------------------------------------------------------+
 #ifndef UI_CHECKBOX_MQH
 #define UI_CHECKBOX_MQH
 
-#property copyright "Copyright 2026, UICheckbox Library"
+#property copyright "Copyright 2026, UIInputCheckbox Library"
 #property link "https://mql5.com"
 #property version "1.00"
 
 #include <AutoTrade/UI/UIDefines.mqh>
 
-class UICheckboxListener {
+class UIInputCheckboxListener {
  public:
    virtual void onChangeValue(bool newValue) = 0;
 };
 
-class UICheckbox {
+class UIInputCheckbox {
  private:
-   UICheckboxListener *m_listener;
-   FOnChange           m_callback;
-   void               *m_context;        // lưu pointer đến object chủ
+   UIInputCheckboxListener *m_listener;
+   FOnChange                m_callback;
+   void                    *m_context;        // lưu pointer đến object chủ
 
-   long                m_chartId;        // ID của chart
-   string              m_name;           // Tên unique cho control
-   int                 m_x;              // Vị trí X
-   int                 m_y;              // Vị trí Y
-   int                 m_size;           // Kích thước checkbox (chiều rộng và chiều cao)
-   int                 m_fontSize;       // Kích thước font chữ label
-   bool                m_value;          // Giá trị hiện tại (true/false)
-   string              m_labelText;      // Text label (nếu có)
+   long                     m_chartId;        // ID của chart
+   string                   m_name;           // Tên unique cho control
+   int                      m_x;              // Vị trí X
+   int                      m_y;              // Vị trí Y
+   int                      m_fontSize;       // Kích thước font chữ label
+   bool                     m_value;          // Giá trị hiện tại (true/false)
+   string                   m_labelText;      // Text label (nếu có)
+   int                      m_zOrderBase;
 
-   color               m_labelTextColor; // Màu label
-   color               m_normalBoxColor; // Màu dấu check
-   color               m_checkBoxColor;  // Màu dấu check
+   color                    m_labelTextColor; // Màu label
+   color                    m_normalBoxColor; // Màu dấu check
+   color                    m_checkBoxColor;  // Màu dấu check
 
-   string              m_labelName;
-   string              m_btnBoxName;
+   string                   m_labelName;
+   string                   m_btnBoxName;
 
  public:
-   UICheckbox() {}
-   ~UICheckbox() { Destroy(); }
+   UIInputCheckbox() {}
+   ~UIInputCheckbox() { Destroy(); }
 
    bool GetValue() const { return m_value; }
 
-   void SetListener(UICheckboxListener *listener) { m_listener = listener; };
+   void SetListener(UIInputCheckboxListener *listener) { m_listener = listener; };
    void SetCallback(void *ctx, FOnChange cb) {
       m_callback = cb;
       m_context  = ctx;
    }
 
-   void Initialization(long chartId, string name) {
+   void Initialize(long chartId, string name) {
       m_chartId        = chartId;
       m_name           = name;
+
+      m_fontSize       = 10;
 
       m_labelTextColor = clrWhite;
       m_normalBoxColor = clrWhite;
@@ -79,6 +81,8 @@ class UICheckbox {
          m_labelTextColor = labelTextColor;
       }
    }
+   void SetFontSize(int fontSize) { m_fontSize = fontSize; }
+   void SetZOrderBase(int zOrder) { m_zOrderBase = zOrder; }
 
    void UpdateValue(bool value) {
       if(m_value != value) {
@@ -104,12 +108,13 @@ class UICheckbox {
       }
    }
 
-   void OnChangeValue(double value) {
+   void OnChangeValue() {
+      int valueInt = m_value ? 1 : 0;
       if(m_listener != NULL) {
-         m_listener.onChangeValue(m_value);
+         m_listener.onChangeValue(valueInt);
       }
       if(m_callback != NULL) {
-         m_callback(m_context, UI_EVENT_CHANGE_VALUE, m_value);
+         m_callback(m_context, UI_EVENT_CHANGE_VALUE, valueInt);
       }
    }
 
@@ -118,27 +123,24 @@ class UICheckbox {
       ObjectDelete(m_chartId, m_btnBoxName);
    }
 
-   void StartDraw(int x, int y, bool value, string labelText, int fontSize = 10);
+   void StartDraw(int x, int y, int fontSize = 10);
    void ClickBtnCheckbox();
    void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
    void OnMQLTesterEvent();
 };
 
-void UICheckbox::StartDraw(int x, int y, bool value, string labelText, int fontSize = 10) {
-   m_x         = x;
-   m_y         = y;
-   m_size      = fontSize + 4; // Kích thước checkbox dựa trên font size để đảm bảo cân đối
-   m_value     = value;
-   m_labelText = labelText;
-   m_fontSize  = fontSize;
+void UIInputCheckbox::StartDraw(int x, int y, int fontSize) {
+   m_x        = x;
+   m_y        = y;
+   m_fontSize = fontSize;
 
    // Create button
    ObjectCreate(m_chartId, m_btnBoxName, OBJ_BUTTON, 0, 0, 0);
    ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_CORNER, CORNER_LEFT_UPPER);
    ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_XDISTANCE, m_x);
    ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_YDISTANCE, m_y);
-   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_XSIZE, m_size);
-   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_YSIZE, m_size);
+   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_XSIZE, m_fontSize + 4);
+   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_YSIZE, m_fontSize + 4);
 
    ObjectSetString(m_chartId, m_btnBoxName, OBJPROP_FONT, "Wingdings");
    ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_FONTSIZE, m_fontSize + 4);
@@ -162,13 +164,13 @@ void UICheckbox::StartDraw(int x, int y, bool value, string labelText, int fontS
    ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_SELECTABLE, false);
    ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_SELECTED, false);
    ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_HIDDEN, true);
-   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_ZORDER, 100);
+   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_ZORDER, m_zOrderBase);
 
    // Create label
    ObjectCreate(m_chartId, m_labelName, OBJ_LABEL, 0, 0, 0);
    ObjectSetInteger(m_chartId, m_labelName, OBJPROP_CORNER, CORNER_LEFT_UPPER);
    ObjectSetInteger(m_chartId, m_labelName, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
-   ObjectSetInteger(m_chartId, m_labelName, OBJPROP_XDISTANCE, m_x + m_size + 5);
+   ObjectSetInteger(m_chartId, m_labelName, OBJPROP_XDISTANCE, m_x + m_fontSize + 4 + 4);
    ObjectSetInteger(m_chartId, m_labelName, OBJPROP_YDISTANCE, m_y);
    ObjectSetString(m_chartId, m_labelName, OBJPROP_TEXT, m_labelText);
    ObjectSetString(m_chartId, m_labelName, OBJPROP_FONT, "Arial");
@@ -178,16 +180,16 @@ void UICheckbox::StartDraw(int x, int y, bool value, string labelText, int fontS
    ObjectSetInteger(m_chartId, m_labelName, OBJPROP_SELECTABLE, false);
    ObjectSetInteger(m_chartId, m_labelName, OBJPROP_SELECTED, false);
    ObjectSetInteger(m_chartId, m_labelName, OBJPROP_HIDDEN, false);
-   ObjectSetInteger(m_chartId, m_labelName, OBJPROP_ZORDER, 102);
+   ObjectSetInteger(m_chartId, m_labelName, OBJPROP_ZORDER, m_zOrderBase);
 }
 
-void UICheckbox::ClickBtnCheckbox() {
+void UIInputCheckbox::ClickBtnCheckbox() {
    ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_STATE, false);
    UpdateValue(!m_value);
-   OnChangeValue(m_value);
+   OnChangeValue();
 }
 
-void UICheckbox::OnChartEvent(
+void UIInputCheckbox::OnChartEvent(
    const int id, const long &lparam, const double &dparam, const string &sparam
 ) {
    if(id == CHARTEVENT_OBJECT_CLICK) {
@@ -197,9 +199,8 @@ void UICheckbox::OnChartEvent(
    }
 }
 
-void UICheckbox::OnMQLTesterEvent() {
-   bool btnSettingState = ObjectGetInteger(m_chartId, m_btnBoxName, OBJPROP_STATE);
-   if(btnSettingState) {
+void UIInputCheckbox::OnMQLTesterEvent() {
+   if(ObjectGetInteger(m_chartId, m_btnBoxName, OBJPROP_STATE)) {
       ClickBtnCheckbox();
    }
 }
