@@ -1,6 +1,6 @@
 #include "TradeDashboardContext.mqh"
-#include <AutoTrade/UI/UICheckbox.mqh>
 #include <AutoTrade/UI/UIDefines.mqh>
+#include <AutoTrade/UI/UIInputCheckbox.mqh>
 #include <AutoTrade/UI/UIInputNumber.mqh>
 #include <AutoTrade/UI/UIPanel.mqh>
 
@@ -21,7 +21,7 @@ class PopupPositionPanelListener : public UIPanelListener {
    void SetPopupPosition(PopupPositionListener *popup) { m_popup = popup; };
 };
 
-class PopupCheckboxTrailingStopListener : public UICheckboxListener {
+class PopupCheckboxTrailingStopListener : public UIInputCheckboxListener {
  public:
    PopupPositionListener *m_popup;
    virtual void           onChangeValue(bool newValue) override {
@@ -56,7 +56,7 @@ class TDPopupPosition : public PopupPositionListener {
    UIInputNumber                     m_ipStopLossPoints;
    UIInputNumber                     m_ipStopLossPrice;
 
-   UICheckbox                        m_cbTrailingStopEnable;
+   UIInputCheckbox                   m_cbTrailingStopEnable;
    bool                              m_enableTrailingStop;
 
    UIInputNumber                     m_ipTSStartPoints;
@@ -75,7 +75,7 @@ class TDPopupPosition : public PopupPositionListener {
    color                             clrBtnCancelBg;
    color                             clrBtnCancelBorder;
 
-   void                              Initialization() {
+   void                              Initialize() {
       m_popupPanelListener.SetPopupPosition(&this);
       m_popupCheckboxTSListener.SetPopupPosition(&this);
 
@@ -103,20 +103,20 @@ class TDPopupPosition : public PopupPositionListener {
       clrBtnCancelBorder   = C'255,60,100';
       // clang-format on
 
-      m_uiPanelPopup.Initialization(g_chartId, "ModifyTicket");
+      m_uiPanelPopup.Initialize(g_chartId, "ModifyTicket");
       m_uiPanelPopup.SetHeaderTitle("Modify Ticket");
 
-      m_ipStopLossPoints.Initialization(g_chartId, "ModifyTicket_StopLossPoints");
-      m_ipStopLossPrice.Initialization(g_chartId, "ModifyTicket_StopLossPrice");
-      m_ipTakeProfitPoints.Initialization(g_chartId, "ModifyTicket_TakeProfitPoints");
-      m_ipTakeProfitPrice.Initialization(g_chartId, "ModifyTicket_TakeProfitPrice");
-      m_cbTrailingStopEnable.Initialization(g_chartId, "ModifyTicket_TrailingStopEnable");
-      m_ipTSStartPoints.Initialization(g_chartId, "ModifyTicket_TSStartPoints");
-      m_ipTSStartPrice.Initialization(g_chartId, "ModifyTicket_TSStartPrice");
-      m_ipTSStepPoints.Initialization(g_chartId, "ModifyTicket_TSStepPoints");
-      m_ipTSStepPrice.Initialization(g_chartId, "ModifyTicket_TSStepPrice");
-      m_ipTSDistancePoints.Initialization(g_chartId, "ModifyTicket_TSDistancePoints");
-      m_ipTSDistancePrice.Initialization(g_chartId, "ModifyTicket_TSDistancePrice");
+      m_ipStopLossPoints.Initialize(g_chartId, "ModifyTicket_StopLossPoints");
+      m_ipStopLossPrice.Initialize(g_chartId, "ModifyTicket_StopLossPrice");
+      m_ipTakeProfitPoints.Initialize(g_chartId, "ModifyTicket_TakeProfitPoints");
+      m_ipTakeProfitPrice.Initialize(g_chartId, "ModifyTicket_TakeProfitPrice");
+      m_cbTrailingStopEnable.Initialize(g_chartId, "ModifyTicket_TrailingStopEnable");
+      m_ipTSStartPoints.Initialize(g_chartId, "ModifyTicket_TSStartPoints");
+      m_ipTSStartPrice.Initialize(g_chartId, "ModifyTicket_TSStartPrice");
+      m_ipTSStepPoints.Initialize(g_chartId, "ModifyTicket_TSStepPoints");
+      m_ipTSStepPrice.Initialize(g_chartId, "ModifyTicket_TSStepPrice");
+      m_ipTSDistancePoints.Initialize(g_chartId, "ModifyTicket_TSDistancePoints");
+      m_ipTSDistancePrice.Initialize(g_chartId, "ModifyTicket_TSDistancePrice");
    }
 
    void SetEnableTrailingStop(bool enableTrailingStop) {
@@ -500,8 +500,9 @@ void TDPopupPosition::StartDraw(int x, int y, int width, int height, bool isShow
    yOffsetPanel = yOffsetPanel + 60;
 
    // Tạo checkbox Trailing Stop
-   m_cbTrailingStopEnable
-      .StartDraw(m_x + 10, m_y + yOffsetPanel, true, "Trailing Stop Settings:", 10);
+   m_cbTrailingStopEnable.SetLabel("Enable Trailing Stop", clrWhite);
+   m_cbTrailingStopEnable.SetValue(true);
+   m_cbTrailingStopEnable.StartDraw(m_x + 10, m_y + yOffsetPanel, 10);
 
    string cbTrailingStopEnableObjNameList[];
    m_cbTrailingStopEnable.GetObjectNameList(cbTrailingStopEnableObjNameList);

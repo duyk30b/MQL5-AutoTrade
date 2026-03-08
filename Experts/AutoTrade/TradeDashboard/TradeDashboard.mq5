@@ -11,8 +11,10 @@
 #include "TDContainer.mqh"
 #include "TDPopupPosition.mqh"
 #include "TradeDashboardContext.mqh"
+#include "TradeDashboardFunction.mqh"
 
 #include <AutoTrade/UI/UICommon.mqh>
+#include <AutoTrade/Utils/UtilString.mqh>
 
 #include <Trade/Trade.mqh>
 
@@ -47,7 +49,18 @@ int OnInit() {
    Print(" ACCOUNT_MARGIN_SO_CALL : " + DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN_SO_CALL)));
    Print(" ACCOUNT_MARGIN_SO_SO : " + DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN_SO_SO)));
 
+   int totalOrders = OrdersTotal();
+   for(int i = 0; i < totalOrders; i++) {
+      ulong ticketOrder = OrderGetTicket(i);
+      upsertGridTicketOrder(ticketOrder);
+   }
+
    int totalPositions = PositionsTotal();
+   for(int i = 0; i < totalPositions; i++) {
+      ulong ticketPosition = PositionGetTicket(i);
+      upsertGridItemPosition(ticketPosition);
+   }
+
    ArrayResize(g_positionList, totalPositions);
    for(int i = 0; i < totalPositions; i++) {
       if(PositionGetTicket(i)) {
@@ -59,10 +72,7 @@ int OnInit() {
       }
    }
 
-   if(!tdContainer.Create(20, 20, 500, 560)) {
-      Print("Không thể tạo Panel!");
-      return INIT_FAILED;
-   }
+   tdContainer.Create(20, 20, 500, 590);
    tdContainer.m_tdTabTrade.SetStopLossPoints(g_slPointsDefault);
    tdContainer.m_tdTabTrade.SetTakeProfitPoints(g_tpPointsDefault);
    tdContainer.m_tdTabTrade.SetEnableTrailingStop(g_enableTrailingStopDefault);
@@ -70,7 +80,7 @@ int OnInit() {
    tdContainer.m_tdTabTrade.SetTrailingStopStepPoints(g_tsStepPointsDefault);
    tdContainer.m_tdTabTrade.SetTrailingStopDistancePoints(g_tsDistancePointsDefault);
 
-   tdPopupPosition.Initialization();
+   tdPopupPosition.Initialize();
    tdPopupPosition.StartDraw(520, 20, 300, 390, false);
    Print("Create Panel Success!");
 
@@ -97,8 +107,8 @@ void OnTick() {
    }
    if(!(bool)MQLInfoInteger(MQL_TESTER)) {
       tdContainer.RefreshData();
-      StartProcessTrailingStop();
    }
+   StartProcessTrailingStop();
 }
 
 void OnTimer() {
@@ -120,55 +130,69 @@ void OnTradeTransaction(
    ulong                       ticketOrder    = trans.order;    // ORDER ticket
    ulong                       ticketPosition = trans.position; // POSITION ticket
    ulong                       ticketDeal     = trans.deal;
-
+   string                      tradeInfo      = StringFormat(
+      "-ticketOrder: %.1f -ticketPosition %.1f -ticketDeal: %.1f",
+      ticketOrder,
+      ticketPosition,
+      ticketDeal
+   );
    switch(type) {
       case TRADE_TRANSACTION_ORDER_ADD:
-         // thường không cần xử lý vì đã lưu lúc tạo lệnh bằng cTrade
+         // Print("TRADE_TRANSACTION_ORDER_ADD: ", tradeInfo);
+         upsertGridTicketOrder(ticketOrder);
+         break;
+      case TRADE_TRANSACTION_ORDER_UPDATE:
+         // Print("TRADE_TRANSACTION_ORDER_UPDATE: ", tradeInfo);
          break;
       case TRADE_TRANSACTION_ORDER_DELETE:
-         // không xử lý trường hợp này, vì khi hủy lệnh pending, sẽ có 1 deal đóng
-         // (DEAL_ENTRY_OUT_BY) để đóng lệnh pending đó, nên sẽ xử lý ở case
-         // TRADE_TRANSACTION_DEAL_ADD bên dưới
+         // Print("TRADE_TRANSACTION_ORDER_DELETE: ", tradeInfo);
+         removeGridItemOrder(ticketOrder);
          break;
       case TRADE_TRANSACTION_DEAL_ADD:
+         // Print("TRADE_TRANSACTION_DEAL_ADD: ", tradeInfo);
          if(HistoryDealSelect(ticketDeal)) {
             ENUM_DEAL_ENTRY dealEntry
                = (ENUM_DEAL_ENTRY)HistoryDealGetInteger(ticketDeal, DEAL_ENTRY);
+            ENUM_DEAL_REASON reason
+               = (ENUM_DEAL_REASON)HistoryDealGetInteger(ticketDeal, DEAL_REASON);
             if(dealEntry == DEAL_ENTRY_IN) {
-               // Mở mới 1 position, cập nhật ticket position cho grid tương ứng với ticket order
-               int idx = FindIndexGridByTicketOrder(ticketOrder);
-               if(idx != -1) {
-                  PositionSelectByTicket(ticketPosition);
-                  g_gridList[idx].ticketPosition = ticketPosition;
-                  g_gridList[idx].ticketDealOpen = ticketDeal;
-                  g_gridList[idx].gridState      = GRID_STATE_POSITION;
-                  g_gridList[idx].positionType
-                     = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
-               }
-
+               int gridIndex = upsertGridItemPosition(ticketPosition);
+               recalculateGridInfo(gridIndex);
             } else if(dealEntry == DEAL_ENTRY_OUT || dealEntry == DEAL_ENTRY_OUT_BY) {
-               // Đóng 1 position, cập nhật ticket deal đóng cho grid tương ứng với ticket position
-               // Không tìm theo ticket order, vì có thể lệnh bị đóng bởi 1 lệnh khác
-               // (DEAL_ENTRY_OUT_BY), nên không còn liên kết với ticket order ban đầu nữa
-               int idx = FindIndexGridByTicketPosition(ticketPosition);
-               if(idx != -1) {
-                  g_gridList[idx].ticketDealClose = ticketDeal;
-                  g_gridList[idx].gridState       = GRID_STATE_CLOSED;
-                  g_gridList[idx].profit          = HistoryDealGetDouble(ticketDeal, DEAL_PROFIT);
-                  g_gridList[idx].closePrice      = HistoryDealGetDouble(ticketDeal, DEAL_PRICE);
-                  g_gridList[idx].symbol          = HistoryDealGetString(ticketDeal, DEAL_SYMBOL);
-                  g_gridList[idx].volume          = HistoryDealGetDouble(ticketDeal, DEAL_VOLUME);
-                  g_gridList[idx].stopLossPrice   = HistoryDealGetDouble(ticketDeal, DEAL_SL);
-                  g_gridList[idx].takeProfitPrice = HistoryDealGetDouble(ticketDeal, DEAL_TP);
-
-                  // g_gridList[idx].closeTime       = HistoryDealGetInteger(ticketDeal, DEAL_TIME);
+               addGridItemDealOut(ticketDeal);
+               int gridIndex = removeGridItemPosition(ticketPosition);
+               if(reason == DEAL_REASON_TP || reason == DEAL_REASON_SL) {
+                  removeAllGridItemOrder(gridIndex);
                }
-
+               recalculateGridInfo(gridIndex);
+            } else if(dealEntry == DEAL_ENTRY_OUT_BY) {
+               // Print("DEAL_ENTRY_OUT_BY: ", tradeInfo);
             } else if(dealEntry == DEAL_ENTRY_INOUT) {
-               // Position đảo chiều, coi như đóng lệnh cũ và mở lệnh mới // Xử lý sau
+               // Print("DEAL_ENTRY_INOUT: ", tradeInfo);
             }
          }
 
+         break;
+      case TRADE_TRANSACTION_DEAL_UPDATE:
+         // Print("TRADE_TRANSACTION_DEAL_UPDATE: ", tradeInfo);
+         break;
+      case TRADE_TRANSACTION_DEAL_DELETE:
+         // Print("TRADE_TRANSACTION_DEAL_DELETE: ", tradeInfo);
+         break;
+      case TRADE_TRANSACTION_HISTORY_ADD:
+         // Print("TRADE_TRANSACTION_HISTORY_ADD: ", tradeInfo);
+         break;
+      case TRADE_TRANSACTION_HISTORY_UPDATE:
+         // Print("TRADE_TRANSACTION_HISTORY_UPDATE: ", tradeInfo);
+         break;
+      case TRADE_TRANSACTION_HISTORY_DELETE:
+         // Print("TRADE_TRANSACTION_HISTORY_DELETE: ", tradeInfo);
+         break;
+      case TRADE_TRANSACTION_POSITION:
+         // Print("TRADE_TRANSACTION_POSITION: ", tradeInfo);
+         break;
+      case TRADE_TRANSACTION_REQUEST:
+         // Print("TRADE_TRANSACTION_REQUEST: ", tradeInfo);
          break;
       default: break;
    }
@@ -192,54 +216,6 @@ void OnMQLTesterRefresh() {
 
    tdContainer.OnMQLTesterRefresh();
    tdPopupPosition.OnMQLTesterRefresh();
-}
-
-// Danh sách hàm xử lý chính cho Trailing Stop, được gọi ở OnTick và OnTimer
-void StartProcessTrailingStop() {
-   int totalPositions = PositionsTotal();
-   for(int i = 0; i < totalPositions; i++) {
-      // Tránh lỗi khi thực tế nhiều item hơn trong g_positionList
-      if(i >= ArraySize(g_positionList)) {
-         continue;
-      }
-      if(!g_positionList[i].enableTrailingStop) {
-         continue;
-      }
-      if(!PositionSelectByTicket(g_positionList[i].ticket)) {
-         continue;
-      }
-
-      string symbol           = PositionGetString(POSITION_SYMBOL);
-      double priceOpen        = PositionGetDouble(POSITION_PRICE_OPEN);
-      double sl               = PositionGetDouble(POSITION_SL);
-      double tp               = PositionGetDouble(POSITION_TP);
-
-      double tsStartPoints    = g_positionList[i].trailingStopStartPoints;
-      double tsStepPoints     = g_positionList[i].trailingStopStepPoints;
-      double tsDistancePoints = g_positionList[i].trailingStopDistancePoints;
-
-      double POINT            = SymbolInfoDouble(symbol, SYMBOL_POINT);
-
-      if(g_positionList[i].type == POSITION_TYPE_BUY) {
-         double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-         if((bid - priceOpen) >= tsStartPoints * POINT) {
-            double newStopLoss = priceOpen + (tsStartPoints - tsDistancePoints) * POINT;
-            if(sl < newStopLoss || sl == 0) {
-               cTrade.PositionModify(g_positionList[i].ticket, newStopLoss, tp);
-               g_positionList[i].trailingStopStartPoints += tsStepPoints;
-            }
-         }
-      } else if(g_positionList[i].type == POSITION_TYPE_SELL) {
-         double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-         if((priceOpen - ask) >= tsStartPoints * POINT) {
-            double newStopLoss = priceOpen - (tsStartPoints - tsDistancePoints) * POINT;
-            if(sl > newStopLoss || sl == 0) {
-               cTrade.PositionModify(g_positionList[i].ticket, newStopLoss, tp);
-               g_positionList[i].trailingStopStartPoints += tsStepPoints;
-            }
-         }
-      }
-   }
 }
 
 // Danh sách các hàm callback

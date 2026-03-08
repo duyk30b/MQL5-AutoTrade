@@ -8,4 +8,9 @@ enum UI_EVENT_TYPE {
 
 typedef void (*FOnChange)(void *context, UI_EVENT_TYPE type, double value);
 
+class UIInputListener {
+ public:
+   virtual void onChangeValue(double newValue) = 0;
+};
+
 #endif // UI_DEFINES_MQH

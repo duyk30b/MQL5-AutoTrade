@@ -43,13 +43,21 @@ class UIInputRadio {
    UIInputRadio() {}
    ~UIInputRadio() { Destroy(); }
 
+   void Destroy() {
+      string objNameList[];
+      int    countObject = GetObjectNameList(objNameList);
+      for(int i = 0; i < countObject; i++) {
+         ObjectDelete(m_chartId, objNameList[i]);
+      }
+   }
+
    void SetListener(UIInputRadioListener *listener) { m_listener = listener; };
    void SetCallback(void *ctx, FOnChange cb) {
       m_callback = cb;
       m_context  = ctx;
    }
 
-   void Initialization(long chartId, string name) {
+   void Initialize(long chartId, string name) {
       m_chartId      = chartId;
       m_name         = name;
 
@@ -100,14 +108,6 @@ class UIInputRadio {
          } else {
             m_callback(m_context, UI_EVENT_CHANGE_VALUE, -1);
          }
-      }
-   }
-
-   void Destroy() {
-      string objNameList[];
-      int    countObject = GetObjectNameList(objNameList);
-      for(int i = 0; i < countObject; i++) {
-         ObjectDelete(m_chartId, objNameList[i]);
       }
    }
 
