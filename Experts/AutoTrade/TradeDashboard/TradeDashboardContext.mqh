@@ -10,18 +10,19 @@ enum ENUM_VOLUME_TYPE {
    VOLUME_TYPE_PERCENT_BALANCE,
    VOLUME_TYPE_PERCENT_EQUITY
 };
-enum GRID_STATE {
-   GRID_STATE_ORDER,     // Order pending
-   GRID_STATE_POSITION,  // Position đang chạy
-   GRID_STATE_CLOSED,    // Đã đóng (Deal OUT)
-   GRID_STATE_CANCELLED, // Đã hủy (Deal OUT)
-};
 
 input ulong      MagicNumber   = 20260206;
 input int        Slippage      = 5;
+
 long             g_chartId     = 0;
-double           g_volumeValue = 0;
+
 ENUM_VOLUME_TYPE g_volumeType  = VOLUME_TYPE_INPUT;
+double           g_volumeValue = 0;
+
+bool             g_enableTrailingStop;
+int              g_tsStartPoints;
+int              g_tsStepPoints;
+int              g_tsDistancePoints;
 
 // clang-format off
 color g_clrBtnGreenBg        = C'0,128,0';    // ForestGreen
@@ -66,45 +67,63 @@ struct PositionInfo {
 
 extern PositionInfo g_positionList[];
 
+enum ENUM_GRID_TYPE {
+   GRID_TYPE_BUY, // Grid loại Buy
+   GRID_TYPE_SELL // Grid loại Sell
+};
+
+struct GridTicketOrderInfo {
+   ulong            ticketOrder;
+   double           volume;
+   double           priceOpen;
+   ENUM_ORDER_STATE orderState;
+};
+
+struct GridTicketPositionInfo {
+   ulong  ticketPosition;
+   double volume;
+   double priceOpen;
+   double profit;
+};
+
+struct GridTicketDealInfo {
+   ulong            ticketDeal;
+   ulong            ticketPosition;
+   ENUM_DEAL_REASON dealReason;
+   double           volume;
+   double           openPrice;
+   double           closePrice;
+   double           profit;
+   double           swap;
+   double           commission;
+   double           fee;
+};
+
 struct GridInfo {
-   string             id;
-   ulong              ticketOrder;
-   ulong              ticketPosition;
-   ulong              ticketDealOpen;
-   ulong              ticketDealClose;
-   ENUM_POSITION_TYPE positionType;
-   string             symbol;
-   GRID_STATE         gridState;
-   double             volume;
-   double             openPrice;
-   double             stopLossPrice;
-   double             takeProfitPrice;
-   double             closePrice;
-   double             profit;
+   string                 gridName;
+   string                 symbol;
+   double                 stopLossPrice;
+   double                 takeProfitPrice;
+   double                 averageOpenPrice;
+   bool                   enableTrailingStop;
+   bool                   tsStarted;
+   double                 tsPeakPrice;
+   int                    tsStartPoints;
+   int                    tsStepPoints;
+   int                    tsDistancePoints;
+   ENUM_GRID_TYPE         gridType; // Loại grid hiện tại (Buy/Sell)
+   GridTicketOrderInfo    ticketOrderList[];
+   GridTicketPositionInfo ticketPositionList[];
+   GridTicketDealInfo     ticketDealList[];
 };
 
 GridInfo g_gridList[];
-int      FindIndexGridByTicketOrder(ulong ticketOrder) {
-   for(int i = 0; i < ArraySize(g_gridList); i++) {
-      if(g_gridList[i].ticketOrder == ticketOrder) {
-         return i;
-      }
-   }
-   return -1;
-}
-int FindIndexGridByTicketPosition(ulong ticketPosition) {
-   for(int i = 0; i < ArraySize(g_gridList); i++) {
-      if(g_gridList[i].ticketPosition == ticketPosition) {
-         return i;
-      }
-   }
-   return -1;
-}
+string   GridNameKey = "GridName";
 
-void   openPopupModifyPosition(ulong ticketId);
-void   changeVolumeRisk();
+void     openPopupModifyPosition(ulong ticketId);
+void     changeVolumeRisk();
 
-double CalculateSafeMaxLot(string symbol, double lotStep, double minLot, double brokerMaxLot) {
+double   CalculateSafeMaxLot(string symbol, double lotStep, double minLot, double brokerMaxLot) {
    double accountEquity = AccountInfoDouble(ACCOUNT_EQUITY);
    double marginUsed    = AccountInfoDouble(ACCOUNT_MARGIN);
    double soLevel       = AccountInfoDouble(ACCOUNT_MARGIN_SO_SO);
@@ -134,10 +153,10 @@ double CalculateSafeMaxLot(string symbol, double lotStep, double minLot, double 
 
 double CalculateVolumeWithRiskMoney(double riskMoney, double stopLossPoints, string symbol) {
    SymbolInfoTick(symbol, Tick);
-   double priceOpen     = Tick.ask; // Giá mở lệnh BUY sẽ là giá Ask, SELL sẽ là giá Bid
-   double lotStep       = SymbolInfoDouble(symbol, SYMBOL_VOLUME_STEP);
-   double minLot        = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MIN);
-   double maxLot        = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MAX);
+   double priceOpen = Tick.ask; // Giá mở lệnh BUY sẽ là giá Ask, SELL sẽ là giá Bid
+   double lotStep   = SymbolInfoDouble(symbol, SYMBOL_VOLUME_STEP);
+   double minLot    = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MIN);
+   double maxLot    = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MAX);
 
    double valuePerPoint = 0.0;
    bool   checked       = OrderCalcProfit(

@@ -29,7 +29,7 @@ class TDTablePositions : public UITableListener {
 
    color      textColorBase;
 
-   bool       Initialization() {
+   bool       Initialize() {
       m_rows        = 6;
       m_cols        = 9;
       m_page        = 1;
@@ -52,7 +52,7 @@ class TDTablePositions : public UITableListener {
       // clang-format on
 
       uiTable.SetListener(&this);
-      uiTable.Initialization(0, "PositionTable", m_rows, m_cols);
+      uiTable.Initialize(0, "PositionTable", m_rows, m_cols);
 
       uiTable.SetTheme(InpTheme);
       uiTable.SetZOrderBase(2);
@@ -91,7 +91,7 @@ class TDTablePositions : public UITableListener {
          int positionIndex = (m_page - 1) * m_rows + i;
 
          if(positionIndex >= totalPositions) {
-            uiTable.SetRowData(i, 0);
+            uiTable.SetRowData(i, "");
             for(int j = 0; j <= 6; j++) {
                uiTable.SetCell(i, j, "-", CELL_TYPE_TEXT);
             }
@@ -102,7 +102,7 @@ class TDTablePositions : public UITableListener {
 
          ulong ticketId = PositionGetTicket(positionIndex);
          if(ticketId > 0) {
-            uiTable.SetRowData(i, ticketId);
+            uiTable.SetRowData(i, IntegerToString(ticketId));
             string symbol = PositionGetString(POSITION_SYMBOL);
             int    digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
             double volume = PositionGetDouble(POSITION_VOLUME);
@@ -155,7 +155,7 @@ class TDTablePositions : public UITableListener {
             }
 
          } else {
-            uiTable.SetRowData(i, 0);
+            uiTable.SetRowData(i, "");
             for(int j = 0; j <= 6; j++) {
                uiTable.SetCell(i, j, "ERROR", CELL_TYPE_TEXT);
                uiTable.SetCellTextColor(i, j, clrRed);
@@ -200,7 +200,7 @@ class TDTablePositions : public UITableListener {
          if(StringFind(sparam, prefixObjCellContent) == 0) {
             int row, col;
             uiTable.GetCellPositionByObjectName(OBJ_CELL_CONTENT, sparam, row, col);
-            ulong ticketId = uiTable.GetRowData(row);
+            ulong ticketId = StringToInteger(uiTable.GetRowData(row));
             if(col == 7) {
                HandleEditPosition(ticketId);
             } else if(col == 8) {
@@ -215,7 +215,7 @@ class TDTablePositions : public UITableListener {
    void OnMQLTesterEvent() {
       uiTable.OnMQLTesterEvent();
       for(int i = 0; i < m_rows; i++) {
-         bool isEmptyRow = (uiTable.GetRowData(i) == 0);
+         bool isEmptyRow = (uiTable.GetRowData(i) == "");
          if(isEmptyRow)
             continue;
 
@@ -223,14 +223,14 @@ class TDTablePositions : public UITableListener {
             = uiCommon.getState(0, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 7));
          if(isBtnEditPressed) {
             uiCommon.setState(0, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 7), false);
-            ulong ticketId = uiTable.GetRowData(i);
+            ulong ticketId = StringToInteger(uiTable.GetRowData(i));
             HandleEditPosition(ticketId);
          }
          bool isBtnClosePressed
             = uiCommon.getState(0, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 8));
          if(isBtnClosePressed) {
             uiCommon.setState(0, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 8), false);
-            ulong ticketId = uiTable.GetRowData(i);
+            ulong ticketId = StringToInteger(uiTable.GetRowData(i));
             // Do ở môi trường tester, ta sẽ không hiện hộp thoại xác nhận
             cTrade.PositionClose(ticketId);
          }

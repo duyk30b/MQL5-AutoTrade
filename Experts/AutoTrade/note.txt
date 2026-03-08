@@ -60,3 +60,9 @@ BUY 20 lot: Gía giảm 100 POINT
 
 RISK 5%BANLANCE : BALANCE 1tr$
 BUY 100 lot: Gía giảm 500 POINT
+
+Với cặp USDJPY
+- Digit 3, Contract Size: 100_000
+-> Nếu giá tăng 123.400 => 124.300 Cho 1 lot Lời 1_000JPY => GIá tăng 100 POINT lời 1_000JPY
+
+== Giá tăng 1200POINT lời 12_000JPY

@@ -1,4 +1,4 @@
----
+# This file use version 18, read more about it here: https://releases.llvm.org/18.1.0/tools/clang/docs/ClangFormatStyleOptions.html
 BasedOnStyle: LLVM
 IndentWidth: 3
 UseTab: Never
@@ -10,7 +10,6 @@ AlignConsecutiveAssignments:
   AcrossEmptyLines: true
   AcrossComments: false
   AlignCompound: true
-  AlignFunctionDeclarations: true
   AlignFunctionPointers: true
   PadOperators: true
 AlignConsecutiveDeclarations:
@@ -18,7 +17,6 @@ AlignConsecutiveDeclarations:
   AcrossEmptyLines: true
   AcrossComments: false
   AlignCompound: true
-  AlignFunctionDeclarations: true
   AlignFunctionPointers: true
   PadOperators: true
 AlignConsecutiveShortCaseStatements:
@@ -30,26 +28,22 @@ AlignTrailingComments:
   Kind: Always
   OverEmptyLines: 2
 AllowShortBlocksOnASingleLine: Always
-AllowShortCaseExpressionOnASingleLine: true
 AllowShortCaseLabelsOnASingleLine: true
 AllowShortEnumsOnASingleLine: true
 AllowShortLoopsOnASingleLine: false
 ColumnLimit: 100
 SpaceBeforeParens: Never
 PointerAlignment: Right
-
 BinPackParameters: false
 BinPackArguments: false
 AlignAfterOpenBracket: BlockIndent
 AllowAllArgumentsOnNextLine: false
 ContinuationIndentWidth: 3
 InsertBraces: false
-KeepEmptyLines:
-  AtEndOfFile: false
-  AtStartOfBlock: false
-  AtStartOfFile: false
+MaxEmptyLinesToKeep: 1
+KeepEmptyLinesAtTheStartOfBlocks: false
 ReferenceAlignment: Right
 AlwaysBreakAfterReturnType: None
 AlwaysBreakAfterDefinitionReturnType: None
-AllowShortFunctionsOnASingleLine: Inline # thay vì false
-PenaltyReturnTypeOnItsOwnLine: 1000 # phạt nặng nếu xuống dòng sau return type
+AllowShortFunctionsOnASingleLine: Inline
+PenaltyReturnTypeOnItsOwnLine: 1000

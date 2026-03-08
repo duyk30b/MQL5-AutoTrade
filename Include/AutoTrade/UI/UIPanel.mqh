@@ -62,11 +62,22 @@ class UIPanel {
  public:
    UIPanel() {};
    ~UIPanel() { PanelDestroy(); };
+   void PanelDestroy() {
+      for(int i = 0; i < ArraySize(m_panelControls); i++) {
+         ObjectDelete(m_chartId, m_panelControls[i].objName);
+      }
+      // Ở đâu khai báo thì ở đó xóa
+      // for(int i = 0; i < ArraySize(m_panelContents); i++) {
+      //    ObjectDelete(m_chartId, m_panelContents[i].objName);
+      // }
+      ArrayResize(m_panelContents, 0);
+      StartRedrawChart();
+   }
 
    void SetListener(UIPanelListener *listener) { m_listener = listener; };
 
    // Khởi tạo panel
-   void Initialization(long chartId, string name) {
+   void Initialize(long chartId, string name) {
       m_chartId         = chartId;
       m_name            = name;
 
@@ -85,12 +96,12 @@ class UIPanel {
       m_borderColor     = C'70,70,70'; // Light gray
       // clang-format on
 
-      m_panelControls[0].objName = m_name + "_Header";
-      m_panelControls[1].objName = m_name + "_Header_Title";
-      m_panelControls[2].objName = m_name + "_Header_BtnMinimized";
-      m_panelControls[3].objName = m_name + "_Header_BtnLock";
-      m_panelControls[4].objName = m_name + "_Header_BtnClose";
-      m_panelControls[5].objName = m_name + "_Content_BackGround";
+      m_panelControls[0].objName = "Obj_" + m_name + "_Header";
+      m_panelControls[1].objName = "Obj_" + m_name + "_Header_Title";
+      m_panelControls[2].objName = "Obj_" + m_name + "_Header_BtnMinimized";
+      m_panelControls[3].objName = "Obj_" + m_name + "_Header_BtnLock";
+      m_panelControls[4].objName = "Obj_" + m_name + "_Header_BtnClose";
+      m_panelControls[5].objName = "Obj_" + m_name + "_Content_BackGround";
    };
    PanelChild GetPanelHeader() { return m_panelControls[0]; }
    PanelChild GetPanelHeaderTitle() { return m_panelControls[1]; }
@@ -100,7 +111,7 @@ class UIPanel {
    PanelChild GetPanelContentBackground() { return m_panelControls[5]; }
 
    void       StartDraw(int _x, int _y, int _width, int _height, bool _isShow);
-   void       PanelDestroy();
+
    void       PanelRefreshPosition();
    void       PanelRefreshPositionExpect(int panelX, int panelY);
    void       StartRedrawChart();
@@ -189,24 +200,6 @@ void UIPanel::StartDraw(int x, int y, int width, int height, bool isShow) {
    DrawHeaderButtonLock();
    DrawHeaderButtonClose();
    DrawContentBackground();
-}
-
-//+------------------------------------------------------------------+
-//| Xóa object |
-//+------------------------------------------------------------------+
-void UIPanel::PanelDestroy() {
-   for(int i = 0; i < ArraySize(m_panelControls); i++) {
-      if(ObjectFind(m_chartId, m_panelControls[i].objName) >= 0) {
-         ObjectDelete(m_chartId, m_panelControls[i].objName);
-      }
-   }
-   for(int i = 0; i < ArraySize(m_panelContents); i++) {
-      if(ObjectFind(m_chartId, m_panelContents[i].objName) >= 0) {
-         ObjectDelete(m_chartId, m_panelContents[i].objName);
-      }
-   }
-   ArrayResize(m_panelContents, 0);
-   StartRedrawChart();
 }
 
 //+------------------------------------------------------------------+
@@ -662,11 +655,13 @@ void UIPanel::OnChartEvent(
 
 void UIPanel::OnMQLTesterEvent() {
    // Xử lý sự kiện trong MQL Tester nếu cần
-   bool isBtnMinClicked = ObjectGetInteger(m_chartId, GetPanelHeaderBtnMin().objName, OBJPROP_STATE);
+   bool isBtnMinClicked
+      = ObjectGetInteger(m_chartId, GetPanelHeaderBtnMin().objName, OBJPROP_STATE);
    if(isBtnMinClicked) {
       HandleClickBtnMinimize();
    }
-   bool isBtnLockClicked = ObjectGetInteger(m_chartId, GetPanelHeaderBtnLock().objName, OBJPROP_STATE);
+   bool isBtnLockClicked
+      = ObjectGetInteger(m_chartId, GetPanelHeaderBtnLock().objName, OBJPROP_STATE);
    if(isBtnLockClicked) {
       ObjectSetInteger(m_chartId, GetPanelHeaderBtnLock().objName, OBJPROP_STATE, false);
       m_isUnlockMove = !m_isUnlockMove;

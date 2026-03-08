@@ -1,6 +1,6 @@
 #include "TDTablePositions.mqh"
 #include "TradeDashboardContext.mqh"
-#include <AutoTrade/UI/UICheckbox.mqh>
+#include <AutoTrade/UI/UIInputCheckbox.mqh>
 #include <AutoTrade/UI/UIInputNumber.mqh>
 #include <AutoTrade/Utils/UtilNumber.mqh>
 
@@ -9,7 +9,7 @@ class TDTabTradeListener {
    virtual void onCheckedTrailingStopChange(bool newValue) = 0;
 };
 
-class CheckboxTrailingStopListener : public UICheckboxListener {
+class CheckboxTrailingStopListener : public UIInputCheckboxListener {
  public:
    TDTabTradeListener *m_container;
    virtual void        onChangeValue(bool newValue) override {
@@ -40,7 +40,7 @@ class TDTabTrade : public TDTabTradeListener {
    UIInputNumber                m_ipStopLossPoints;
    UIInputNumber                m_ipTakeProfitPoints;
 
-   UICheckbox                   m_cbTrailingStopEnable;
+   UIInputCheckbox              m_cbTrailingStopEnable;
    bool                         m_enableTrailingStop;
 
    UIInputNumber                m_ipTrailingStopStart;
@@ -61,11 +61,21 @@ class TDTabTrade : public TDTabTradeListener {
    color                        m_clrBtnCloseAllBg;
    color                        m_clrBtnCloseAllBorder;
 
-   virtual void                 onCheckedTrailingStopChange(bool newValue) override {
+   TDTabTrade() {}
+   ~TDTabTrade() {
+      ObjectDelete(g_chartId, m_ObjWalletInfoName);
+      ObjectDelete(g_chartId, m_ObjMarginInfoName);
+      ObjectDelete(g_chartId, m_ObjBtnBuyName);
+      ObjectDelete(g_chartId, m_ObjBtnSellName);
+      ObjectDelete(g_chartId, m_ObjBtnCloseAllName);
+      ObjectDelete(g_chartId, m_ObjStatusName);
+   }
+
+   virtual void onCheckedTrailingStopChange(bool newValue) override {
       SetEnableTrailingStop(newValue);
    }
 
-   void Initialization() {
+   void Initialize() {
       m_cbTrailingStopEnable.SetListener(&m_checkboxTrailingStopListener);
       m_checkboxTrailingStopListener.SetContainer(&this);
 
@@ -90,14 +100,14 @@ class TDTabTrade : public TDTabTradeListener {
 
       m_enableTrailingStop = true;
 
-      m_tdTablePositions.Initialization();
-      m_ipLotSize.Initialization(g_chartId, "InputLotSize");
-      m_ipStopLossPoints.Initialization(g_chartId, "InputStopLossPoints");
-      m_ipTakeProfitPoints.Initialization(g_chartId, "InputTakeProfitPoints");
-      m_cbTrailingStopEnable.Initialization(g_chartId, "CheckboxTrailingStopEnable");
-      m_ipTrailingStopStart.Initialization(g_chartId, "InputTrailingStopStart");
-      m_ipTrailingStopStep.Initialization(g_chartId, "InputTrailingStopStep");
-      m_ipTrailingStopDistance.Initialization(g_chartId, "InputTrailingStopDistance");
+      m_tdTablePositions.Initialize();
+      m_ipLotSize.Initialize(g_chartId, "InputLotSize");
+      m_ipStopLossPoints.Initialize(g_chartId, "InputStopLossPoints");
+      m_ipTakeProfitPoints.Initialize(g_chartId, "InputTakeProfitPoints");
+      m_cbTrailingStopEnable.Initialize(g_chartId, "CheckboxTrailingStopEnable");
+      m_ipTrailingStopStart.Initialize(g_chartId, "InputTrailingStopStart");
+      m_ipTrailingStopStep.Initialize(g_chartId, "InputTrailingStopStep");
+      m_ipTrailingStopDistance.Initialize(g_chartId, "InputTrailingStopDistance");
    }
 
    static void OnChangeStopLossPoints(void *context, UI_EVENT_TYPE type, double newStopLossPoints) {
@@ -321,8 +331,10 @@ void TDTabTrade::StartDraw(int x, int y, int width, int height) {
    yOffsetPanel = yOffsetPanel + 60;
 
    // Tạo checkbox Enable Trailing Stop
-   m_cbTrailingStopEnable
-      .StartDraw(m_x + 10, m_y + yOffsetPanel, m_enableTrailingStop, "Trailing Stop Settings:", 10);
+   m_cbTrailingStopEnable.SetValue(m_enableTrailingStop);
+   m_cbTrailingStopEnable.SetLabel("Enable Trailing Stop", clrWhite);
+   m_cbTrailingStopEnable.SetZOrderBase(101);
+   m_cbTrailingStopEnable.StartDraw(m_x + 10, m_y + yOffsetPanel, 10);
 
    yOffsetPanel = yOffsetPanel + 20;
 

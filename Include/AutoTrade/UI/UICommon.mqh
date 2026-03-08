@@ -33,7 +33,6 @@ class UICommon {
       ObjectSetInteger(chartId, name, OBJPROP_SELECTABLE, true);
       ObjectSetInteger(chartId, name, OBJPROP_SELECTED, false);
       ObjectSetInteger(chartId, name, OBJPROP_HIDDEN, true);
-      ObjectSetInteger(chartId, name, OBJPROP_ZORDER, 100);
    }
 
    bool CreateLabel(
@@ -170,6 +169,22 @@ class UICommon {
          OBJPROP_TIMEFRAMES,
          isShow ? OBJ_ALL_PERIODS : OBJ_NO_PERIODS
       );
+   }
+   void CreateHorizontalLine(long chartId, string name, double price) {
+      ObjectCreate(chartId, name, OBJ_HLINE, 0, 0, 0);
+      ObjectSetDouble(chartId, name, OBJPROP_PRICE, price);
+   }
+   void setLineColor(long chartId, string name, color lineColor) {
+      ObjectSetInteger(chartId, name, OBJPROP_COLOR, lineColor);
+   }
+   void setLineStyle(long chartId, string name, ENUM_LINE_STYLE lineStyle) {
+      ObjectSetInteger(chartId, name, OBJPROP_STYLE, lineStyle);
+   }
+   void setLineWidth(long chartId, string name, int lineWidth) {
+      ObjectSetInteger(chartId, name, OBJPROP_WIDTH, lineWidth);
+   }
+   void setLinePrice(long chartId, string name, double price) {
+      ObjectSetDouble(chartId, name, OBJPROP_PRICE, price);
    }
 };
 #endif // UI_COMMON_MQH

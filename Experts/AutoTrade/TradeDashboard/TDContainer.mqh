@@ -4,7 +4,6 @@
 #include "TDTablePositions.mqh"
 #include "TradeDashboardContext.mqh"
 
-#include <AutoTrade/UI/UICheckbox.mqh>
 #include <AutoTrade/UI/UIInputNumber.mqh>
 #include <AutoTrade/UI/UIPanel.mqh>
 
@@ -51,8 +50,16 @@ class TDContainer : public TDContainerListener {
    string                 m_ObjTabMenuGridName;
    string                 m_ObjTabMenuSettingName;
 
-   bool                   Create(int x, int y, int width, int height) {
-      Initialization();
+   TDContainer() {}
+   ~TDContainer() {
+      ObjectDelete(g_chartId, m_ObjNewsName);
+      ObjectDelete(g_chartId, m_ObjTabMenuTradeName);
+      ObjectDelete(g_chartId, m_ObjTabMenuGridName);
+      ObjectDelete(g_chartId, m_ObjTabMenuSettingName);
+   }
+
+   void Create(int x, int y, int width, int height) {
+      Initialize();
       StartDraw(x, y, width, height);
 
       m_uiPanelContainer.AddPanelChildName(m_ObjTabMenuTradeName);
@@ -79,10 +86,9 @@ class TDContainer : public TDContainerListener {
 
       m_uiPanelContainer.PanelRefreshPosition();
       RefreshData();
-      return true;
    }
 
-   void Initialization() {
+   void Initialize() {
       m_panelContainerListener.SetContainer(&this);
 
       m_currentTab            = TD_TAB_TRADE;
@@ -91,12 +97,12 @@ class TDContainer : public TDContainerListener {
       m_ObjTabMenuTradeName   = "M_ObjTabMenuTradeName";
       m_ObjTabMenuSettingName = "M_ObjTabMenuSettingName";
       m_ObjTabMenuGridName    = "M_ObjTabMenuGridName";
-      m_uiPanelContainer.Initialization(g_chartId, "TradingPanel");
+      m_uiPanelContainer.Initialize(g_chartId, "TradingPanel");
       m_uiPanelContainer.SetHeaderTitle("Trade Dashboard");
 
-      m_tdTabTrade.Initialization();
-      m_tdTabSetting.Initialization();
-      m_tdTabGrid.Initialization();
+      m_tdTabTrade.Initialize();
+      m_tdTabSetting.Initialize();
+      m_tdTabGrid.Initialize();
    }
 
    virtual void onIsMinimizedPanelChange(bool _isMinimized) override {
@@ -114,7 +120,7 @@ class TDContainer : public TDContainerListener {
 };
 
 void TDContainer::StartDraw(int x, int y, int width, int height) {
-   m_x = x;
+   m_x      = x;
    m_y      = y;
    m_width  = width;
    m_height = height;
@@ -217,7 +223,7 @@ void TDContainer::ClickTabMenuSetting() {
 
       m_tdTabTrade.DestroyDraw();
       m_tdTabGrid.DestroyDraw();
-      m_tdTabSetting.StartDraw(m_x, m_y + yOffsetPanel, m_width, m_height - yOffsetPanel);
+      m_tdTabSetting.OpenTab(m_x, m_y + yOffsetPanel, m_width, m_height - yOffsetPanel);
       ChartRedraw(g_chartId);
    }
 }
