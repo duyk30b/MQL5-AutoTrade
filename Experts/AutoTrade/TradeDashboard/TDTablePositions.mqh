@@ -11,7 +11,7 @@ struct ButtonInfo {
    int    col;
    string objectName;
 };
-class TDTablePositions : public UITableListener {
+class TDTablePositions : public UIListener {
  public:
    int        m_x;
    int        m_y;
@@ -52,7 +52,7 @@ class TDTablePositions : public UITableListener {
       // clang-format on
 
       uiTable.SetListener(&this);
-      uiTable.Initialize(0, "PositionTable", m_rows, m_cols);
+      uiTable.Initialize(g_chartId, "PositionTable", m_rows, m_cols);
 
       uiTable.SetTheme(InpTheme);
       uiTable.SetZOrderBase(2);
@@ -69,9 +69,11 @@ class TDTablePositions : public UITableListener {
       return true;
    }
 
-   virtual void onChangePage(int newPage) override {
-      m_page = newPage;
-      RefreshTicketPositionsData();
+   virtual void listen(void *child, UI_EVENT_TYPE type, double value) override {
+      if(type == UI_EVENT_CHANGE_PAGE) {
+         m_page = (int)value;
+         RefreshTicketPositionsData();
+      }
    }
 
    int  GetHeight() { return uiTable.GetHeight(); }
@@ -95,8 +97,8 @@ class TDTablePositions : public UITableListener {
             for(int j = 0; j <= 6; j++) {
                uiTable.SetCell(i, j, "-", CELL_TYPE_TEXT);
             }
-            uiCommon.setShow(0, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 7), false);
-            uiCommon.setShow(0, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 8), false);
+            uiCommon.setShow(g_chartId, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 7), false);
+            uiCommon.setShow(g_chartId, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 8), false);
             continue;
          }
 
@@ -126,8 +128,8 @@ class TDTablePositions : public UITableListener {
             uiTable.SetCell(i, 7, "Edit", CELL_TYPE_BUTTON);
             uiTable.SetCell(i, 8, "Close", CELL_TYPE_BUTTON);
             if(!m_isMinimized) {
-               uiCommon.setShow(0, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 7), true);
-               uiCommon.setShow(0, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 8), true);
+               uiCommon.setShow(g_chartId, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 7), true);
+               uiCommon.setShow(g_chartId, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 8), true);
             }
 
             // Set profit color
@@ -160,8 +162,8 @@ class TDTablePositions : public UITableListener {
                uiTable.SetCell(i, j, "ERROR", CELL_TYPE_TEXT);
                uiTable.SetCellTextColor(i, j, clrRed);
             }
-            uiCommon.setShow(0, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 7), false);
-            uiCommon.setShow(0, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 8), false);
+            uiCommon.setShow(g_chartId, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 7), false);
+            uiCommon.setShow(g_chartId, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 8), false);
             continue;
          }
       }
@@ -193,8 +195,8 @@ class TDTablePositions : public UITableListener {
 
    void HandleEditPosition(ulong ticketId) { openPopupModifyPosition(ticketId); }
 
-   bool OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam) {
-      uiTable.OnChartEvent(id, lparam, dparam, sparam);
+   bool OnRealtimeEvent(const int id, const long &lparam, const double &dparam, const string &sparam) {
+      uiTable.OnRealtimeEvent(id, lparam, dparam, sparam);
       if(id == CHARTEVENT_OBJECT_CLICK) {
          string prefixObjCellContent = uiTable.GetObjectNamePrefix(OBJ_CELL_CONTENT);
          if(StringFind(sparam, prefixObjCellContent) == 0) {
@@ -212,24 +214,24 @@ class TDTablePositions : public UITableListener {
       return true;
    }
 
-   void OnMQLTesterEvent() {
-      uiTable.OnMQLTesterEvent();
+   void OnStrategyTesterEvent() {
+      uiTable.OnStrategyTesterEvent();
       for(int i = 0; i < m_rows; i++) {
          bool isEmptyRow = (uiTable.GetRowData(i) == "");
          if(isEmptyRow)
             continue;
 
          bool isBtnEditPressed
-            = uiCommon.getState(0, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 7));
+            = uiCommon.getState(g_chartId, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 7));
          if(isBtnEditPressed) {
-            uiCommon.setState(0, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 7), false);
+            uiCommon.setState(g_chartId, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 7), false);
             ulong ticketId = StringToInteger(uiTable.GetRowData(i));
             HandleEditPosition(ticketId);
          }
          bool isBtnClosePressed
-            = uiCommon.getState(0, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 8));
+            = uiCommon.getState(g_chartId, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 8));
          if(isBtnClosePressed) {
-            uiCommon.setState(0, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 8), false);
+            uiCommon.setState(g_chartId, uiTable.GetObjectName(OBJ_CELL_CONTENT, i, 8), false);
             ulong ticketId = StringToInteger(uiTable.GetRowData(i));
             // Do ở môi trường tester, ta sẽ không hiện hộp thoại xác nhận
             cTrade.PositionClose(ticketId);

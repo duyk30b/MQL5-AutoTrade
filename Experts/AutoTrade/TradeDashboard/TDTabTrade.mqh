@@ -4,62 +4,45 @@
 #include <AutoTrade/UI/UIInputNumber.mqh>
 #include <AutoTrade/Utils/UtilNumber.mqh>
 
-class TDTabTradeListener {
+class TDTabTrade : public UIListener {
  public:
-   virtual void onCheckedTrailingStopChange(bool newValue) = 0;
-};
+   TDTablePositions m_tdTablePositions;
 
-class CheckboxTrailingStopListener : public UIInputCheckboxListener {
- public:
-   TDTabTradeListener *m_container;
-   virtual void        onChangeValue(bool newValue) override {
-      if(m_container) {
-         m_container.onCheckedTrailingStopChange(newValue);
-      }
-   };
-   void SetContainer(TDTabTradeListener *container) { m_container = container; };
-};
+   int              m_x;
+   int              m_y;
+   int              m_width;
+   int              m_height;
 
-class TDTabTrade : public TDTabTradeListener {
- public:
-   TDTablePositions             m_tdTablePositions;
-   CheckboxTrailingStopListener m_checkboxTrailingStopListener;
+   int              m_slPoints;
+   int              m_tpPoints;
+   int              m_tsStartPoints;
+   int              m_tsStepPoints;
+   int              m_tsDistancePoints;
 
-   int                          m_x;
-   int                          m_y;
-   int                          m_width;
-   int                          m_height;
+   UIInputNumber    m_ipLotSize;
+   UIInputNumber    m_ipStopLossPoints;
+   UIInputNumber    m_ipTakeProfitPoints;
 
-   int                          m_slPoints;
-   int                          m_tpPoints;
-   int                          m_tsStartPoints;
-   int                          m_tsStepPoints;
-   int                          m_tsDistancePoints;
+   UIInputCheckbox  m_ipcTrailingStopEnable;
+   bool             m_enableTrailingStop;
 
-   UIInputNumber                m_ipLotSize;
-   UIInputNumber                m_ipStopLossPoints;
-   UIInputNumber                m_ipTakeProfitPoints;
+   UIInputNumber    m_ipnTrailingStopStart;
+   UIInputNumber    m_ipnTrailingStopStep;
+   UIInputNumber    m_ipnTrailingStopDistance;
 
-   UIInputCheckbox              m_cbTrailingStopEnable;
-   bool                         m_enableTrailingStop;
+   string           m_ObjWalletInfoName;
+   string           m_ObjMarginInfoName;
+   string           m_ObjBtnBuyName;
+   string           m_ObjBtnSellName;
+   string           m_ObjBtnCloseAllName;
+   string           m_ObjStatusName;
 
-   UIInputNumber                m_ipTrailingStopStart;
-   UIInputNumber                m_ipTrailingStopStep;
-   UIInputNumber                m_ipTrailingStopDistance;
-
-   string                       m_ObjWalletInfoName;
-   string                       m_ObjMarginInfoName;
-   string                       m_ObjBtnBuyName;
-   string                       m_ObjBtnSellName;
-   string                       m_ObjBtnCloseAllName;
-   string                       m_ObjStatusName;
-
-   color                        m_clrBtnBuyBg;
-   color                        m_clrBtnBuyBorder;
-   color                        m_clrBtnSellBg;
-   color                        m_clrBtnSellBorder;
-   color                        m_clrBtnCloseAllBg;
-   color                        m_clrBtnCloseAllBorder;
+   color            m_clrBtnBuyBg;
+   color            m_clrBtnBuyBorder;
+   color            m_clrBtnSellBg;
+   color            m_clrBtnSellBorder;
+   color            m_clrBtnCloseAllBg;
+   color            m_clrBtnCloseAllBorder;
 
    TDTabTrade() {}
    ~TDTabTrade() {
@@ -71,14 +54,27 @@ class TDTabTrade : public TDTabTradeListener {
       ObjectDelete(g_chartId, m_ObjStatusName);
    }
 
-   virtual void onCheckedTrailingStopChange(bool newValue) override {
-      SetEnableTrailingStop(newValue);
+   virtual void listen(void *child, UI_EVENT_TYPE type, double value) override {
+      if(type == UI_EVENT_CHANGE_VALUE) {
+         if(child == &m_ipcTrailingStopEnable) {
+            if(value == 1) {
+               m_enableTrailingStop = true;
+               m_ipnTrailingStopStart.UpdateDisabled(false);
+               m_ipnTrailingStopStep.UpdateDisabled(false);
+               m_ipnTrailingStopDistance.UpdateDisabled(false);
+            } else {
+               m_enableTrailingStop = false;
+               m_ipnTrailingStopStart.UpdateDisabled(true);
+               m_ipnTrailingStopStep.UpdateDisabled(true);
+               m_ipnTrailingStopDistance.UpdateDisabled(true);
+            }
+         }
+         ChartRedraw(g_chartId);
+      }
    }
 
    void Initialize() {
-      m_cbTrailingStopEnable.SetListener(&m_checkboxTrailingStopListener);
-      m_checkboxTrailingStopListener.SetContainer(&this);
-
+      m_ipcTrailingStopEnable.SetListener(&this);
       m_ipLotSize.SetCallback(&this, TDTabTrade::OnChangeLotSize);
       m_ipStopLossPoints.SetCallback(&this, TDTabTrade::OnChangeStopLossPoints);
 
@@ -98,32 +94,32 @@ class TDTabTrade : public TDTabTradeListener {
       m_clrBtnCloseAllBorder = C'255,180,80';
       // clang-format on
 
-      m_enableTrailingStop = true;
+      m_enableTrailingStop = false;
 
       m_tdTablePositions.Initialize();
-      m_ipLotSize.Initialize(g_chartId, "InputLotSize");
-      m_ipStopLossPoints.Initialize(g_chartId, "InputStopLossPoints");
-      m_ipTakeProfitPoints.Initialize(g_chartId, "InputTakeProfitPoints");
-      m_cbTrailingStopEnable.Initialize(g_chartId, "CheckboxTrailingStopEnable");
-      m_ipTrailingStopStart.Initialize(g_chartId, "InputTrailingStopStart");
-      m_ipTrailingStopStep.Initialize(g_chartId, "InputTrailingStopStep");
-      m_ipTrailingStopDistance.Initialize(g_chartId, "InputTrailingStopDistance");
+      m_ipLotSize.Initialize(g_chartId, "TDTabTrade_InputLotSize");
+      m_ipStopLossPoints.Initialize(g_chartId, "TDTabTrade_InputStopLossPoints");
+      m_ipTakeProfitPoints.Initialize(g_chartId, "TDTabTrade_InputTakeProfitPoints");
+      m_ipcTrailingStopEnable.Initialize(g_chartId, "TDTabTrade_CheckboxTrailingStopEnable");
+      m_ipnTrailingStopStart.Initialize(g_chartId, "TDTabTrade_InputTrailingStopStart");
+      m_ipnTrailingStopStep.Initialize(g_chartId, "TDTabTrade_InputTrailingStopStep");
+      m_ipnTrailingStopDistance.Initialize(g_chartId, "TDTabTrade_InputTrailingStopDistance");
    }
 
    static void OnChangeStopLossPoints(void *context, UI_EVENT_TYPE type, double newStopLossPoints) {
       TDTabTrade *self = (TDTabTrade *)context;
       if(type == UI_EVENT_CHANGE_VALUE) {
          double lotSize = 0;
-         if(g_volumeType == VOLUME_TYPE_INPUT) {
+         if(g_volumeType == VOLUME_RISK_INPUT) {
             lotSize = self.m_ipLotSize.GetValue();
-         } else if(g_volumeType == VOLUME_TYPE_MONEY) {
+         } else if(g_volumeType == VOLUME_RISK_MONEY) {
             lotSize = CalculateVolumeWithRiskMoney(g_volumeValue, newStopLossPoints, _Symbol);
             self.m_ipLotSize.UpdateValue(lotSize);
-         } else if(g_volumeType == VOLUME_TYPE_PERCENT_BALANCE) {
+         } else if(g_volumeType == VOLUME_RISK_PERCENT_BALANCE) {
             lotSize
                = CalculateVolumeWithRiskPercentBalance(g_volumeValue, newStopLossPoints, _Symbol);
             self.m_ipLotSize.UpdateValue(lotSize);
-         } else if(g_volumeType == VOLUME_TYPE_PERCENT_EQUITY) {
+         } else if(g_volumeType == VOLUME_RISK_PERCENT_EQUITY) {
             lotSize
                = CalculateVolumeWithRiskPercentEquity(g_volumeValue, newStopLossPoints, _Symbol);
             self.m_ipLotSize.UpdateValue(lotSize);
@@ -135,15 +131,15 @@ class TDTabTrade : public TDTabTradeListener {
       TDTabTrade *self = (TDTabTrade *)context;
       if(type == UI_EVENT_CHANGE_VALUE) {
          // double stopLossPrice = 0;
-         // if(g_volumeType == VOLUME_TYPE_INPUT) {
+         // if(g_volumeType == VOLUME_RISK_INPUT) {
          //    stopLossPrice = self.m_ipStopLossPoints.GetValue();
-         // } else if(g_volumeType == VOLUME_TYPE_MONEY) {
+         // } else if(g_volumeType == VOLUME_RISK_MONEY) {
          //    stopLossPrice = CalculateStopLossWithRiskMoney(g_volumeValue, newLotSize, _Symbol);
          //    double stopLossPoints
          //       = MathFloor(stopLossPrice / SymbolInfoDouble(_Symbol, SYMBOL_POINT));
          //    self.m_ipStopLossPoints.UpdateValue(stopLossPoints);
 
-         // } else if(g_volumeType == VOLUME_TYPE_PERCENT_BALANCE) {
+         // } else if(g_volumeType == VOLUME_RISK_PERCENT_BALANCE) {
          //    stopLossPrice = CalculateStopLossWithRiskPercent(g_volumeValue, newLotSize, _Symbol);
          //    double stopLossPoints
          //       = MathFloor(stopLossPrice / SymbolInfoDouble(_Symbol, SYMBOL_POINT));
@@ -167,19 +163,19 @@ class TDTabTrade : public TDTabTradeListener {
 
       string cbTrailingStopEnableObjNameList[];
       int    cbTrailingStopEnableObjCount
-         = m_cbTrailingStopEnable.GetObjectNameList(cbTrailingStopEnableObjNameList);
+         = m_ipcTrailingStopEnable.GetObjectNameList(cbTrailingStopEnableObjNameList);
 
       string ipTrailingStopStartObjNameList[];
       int    ipTrailingStopStartObjCount
-         = m_ipTrailingStopStart.GetObjectNameList(ipTrailingStopStartObjNameList);
+         = m_ipnTrailingStopStart.GetObjectNameList(ipTrailingStopStartObjNameList);
 
       string ipTrailingStopStepObjNameList[];
       int    ipTrailingStopStepObjCount
-         = m_ipTrailingStopStep.GetObjectNameList(ipTrailingStopStepObjNameList);
+         = m_ipnTrailingStopStep.GetObjectNameList(ipTrailingStopStepObjNameList);
 
       string ipTrailingStopDistanceObjNameList[];
       int    ipTrailingStopDistanceObjCount
-         = m_ipTrailingStopDistance.GetObjectNameList(ipTrailingStopDistanceObjNameList);
+         = m_ipnTrailingStopDistance.GetObjectNameList(ipTrailingStopDistanceObjNameList);
 
       ArrayResize(
          objNameList,
@@ -225,28 +221,28 @@ class TDTabTrade : public TDTabTradeListener {
    }
    void SetTrailingStopStartPoints(int tsStartPoints) {
       m_tsStartPoints = tsStartPoints;
-      m_ipTrailingStopStart.UpdateValue(m_tsStartPoints);
+      m_ipnTrailingStopStart.UpdateValue(m_tsStartPoints);
    }
    void SetTrailingStopStepPoints(int tsStepPoints) {
       m_tsStepPoints = tsStepPoints;
-      m_ipTrailingStopStep.UpdateValue(m_tsStepPoints);
+      m_ipnTrailingStopStep.UpdateValue(m_tsStepPoints);
    }
    void SetTrailingStopDistancePoints(int tsDistancePoints) {
       m_tsDistancePoints = tsDistancePoints;
-      m_ipTrailingStopDistance.UpdateValue(m_tsDistancePoints);
+      m_ipnTrailingStopDistance.UpdateValue(m_tsDistancePoints);
    }
    void SetEnableTrailingStop(bool enableTrailingStop) {
       if(enableTrailingStop != m_enableTrailingStop) {
          m_enableTrailingStop = enableTrailingStop;
-         m_cbTrailingStopEnable.UpdateValue(m_enableTrailingStop);
+         m_ipcTrailingStopEnable.UpdateValue(m_enableTrailingStop);
          if(m_enableTrailingStop) {
-            m_ipTrailingStopStart.UpdateDisabled(false);
-            m_ipTrailingStopStep.UpdateDisabled(false);
-            m_ipTrailingStopDistance.UpdateDisabled(false);
+            m_ipnTrailingStopStart.UpdateDisabled(false);
+            m_ipnTrailingStopStep.UpdateDisabled(false);
+            m_ipnTrailingStopDistance.UpdateDisabled(false);
          } else {
-            m_ipTrailingStopStart.UpdateDisabled(true);
-            m_ipTrailingStopStep.UpdateDisabled(true);
-            m_ipTrailingStopDistance.UpdateDisabled(true);
+            m_ipnTrailingStopStart.UpdateDisabled(true);
+            m_ipnTrailingStopStep.UpdateDisabled(true);
+            m_ipnTrailingStopDistance.UpdateDisabled(true);
          }
       }
    }
@@ -259,8 +255,10 @@ class TDTabTrade : public TDTabTradeListener {
    void ClickBtnSell();
    void ClickBtnCloseAllPosition();
    void RefreshData();
-   void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
-   void OnMQLTesterEvent();
+   void OnRealtimeEvent(
+      const int id, const long &lparam, const double &dparam, const string &sparam
+   );
+   void OnStrategyTesterEvent();
 };
 
 void TDTabTrade::StartDraw(int x, int y, int width, int height) {
@@ -268,6 +266,9 @@ void TDTabTrade::StartDraw(int x, int y, int width, int height) {
    m_y              = y;
    m_width          = width;
    m_height         = height;
+
+   int fontSize     = 10;
+
    int yOffsetPanel = 0;
 
    // Tạo label hiển thị thông tin tài khoản
@@ -304,7 +305,7 @@ void TDTabTrade::StartDraw(int x, int y, int width, int height) {
    m_ipLotSize.SetStep(0.01);
    m_ipLotSize.SetDigits(2);
    m_ipLotSize.SetMinValue(0.00);
-   m_ipLotSize.StartDraw(m_x + 10, m_y + yOffsetPanel, (m_width - 10) / 3 - 10, 45);
+   m_ipLotSize.StartDraw(m_x + 10, m_y + yOffsetPanel, (m_width - 10) / 3 - 10, fontSize);
 
    // Tạo ô nhập StopLoss Points
    m_ipStopLossPoints.SetLabel("Stop Loss (Points):", clrWhite);
@@ -312,8 +313,12 @@ void TDTabTrade::StartDraw(int x, int y, int width, int height) {
    m_ipStopLossPoints.SetStep(100);
    m_ipStopLossPoints.SetDigits(0);
    m_ipStopLossPoints.SetMinValue(0);
-   m_ipStopLossPoints
-      .StartDraw(m_x + (m_width - 10) / 3 + 10, m_y + yOffsetPanel, (m_width - 10) / 3 - 10, 45);
+   m_ipStopLossPoints.StartDraw(
+      m_x + (m_width - 10) / 3 + 10,
+      m_y + yOffsetPanel,
+      (m_width - 10) / 3 - 10,
+      fontSize
+   );
 
    // Tạo ô nhập TakeProfit Points
    m_ipTakeProfitPoints.SetLabel("Take Profit (Points):", clrWhite);
@@ -325,63 +330,68 @@ void TDTabTrade::StartDraw(int x, int y, int width, int height) {
       m_x + 2 * (m_width - 10) / 3 + 10,
       m_y + yOffsetPanel,
       (m_width - 10) / 3 - 10,
-      45
+      fontSize
    );
 
    yOffsetPanel = yOffsetPanel + 60;
 
    // Tạo checkbox Enable Trailing Stop
-   m_cbTrailingStopEnable.SetValue(m_enableTrailingStop);
-   m_cbTrailingStopEnable.SetLabel("Enable Trailing Stop", clrWhite);
-   m_cbTrailingStopEnable.SetZOrderBase(101);
-   m_cbTrailingStopEnable.StartDraw(m_x + 10, m_y + yOffsetPanel, 10);
+   m_ipcTrailingStopEnable.SetValue(m_enableTrailingStop);
+   m_ipcTrailingStopEnable.SetLabel("Enable Trailing Stop");
+   m_ipcTrailingStopEnable.SetZOrderBase(101);
+   m_ipcTrailingStopEnable.StartDraw(m_x + 10, m_y + yOffsetPanel, fontSize);
 
    yOffsetPanel = yOffsetPanel + 20;
 
    // Tạo ô nhập Trailing Stop Start
-   m_ipTrailingStopStart.SetLabel("TS Start (Points):", clrWhite);
-   m_ipTrailingStopStart.SetValue(m_tsStartPoints);
-   m_ipTrailingStopStart.SetStep(10);
-   m_ipTrailingStopStart.SetDigits(0);
-   m_ipTrailingStopStart.SetMinValue(0);
+   m_ipnTrailingStopStart.SetLabel("TS Start (Points):", clrWhite);
+   m_ipnTrailingStopStart.SetValue(m_tsStartPoints);
+   m_ipnTrailingStopStart.SetStep(10);
+   m_ipnTrailingStopStart.SetDigits(0);
+   m_ipnTrailingStopStart.SetMinValue(0);
    if(m_enableTrailingStop) {
-      m_ipTrailingStopStart.UpdateDisabled(false);
+      m_ipnTrailingStopStart.UpdateDisabled(false);
    } else {
-      m_ipTrailingStopStart.UpdateDisabled(true);
+      m_ipnTrailingStopStart.UpdateDisabled(true);
    }
-   m_ipTrailingStopStart.StartDraw(m_x + 10, m_y + yOffsetPanel, (m_width - 10) / 3 - 10, 45);
+   m_ipnTrailingStopStart
+      .StartDraw(m_x + 10, m_y + yOffsetPanel, (m_width - 10) / 3 - 10, fontSize);
 
    // Tạo ô nhập Trailing Stop Step
-   m_ipTrailingStopStep.SetLabel("TS Step (Points):", clrWhite);
-   m_ipTrailingStopStep.SetValue(m_tsStepPoints);
-   m_ipTrailingStopStep.SetStep(10);
-   m_ipTrailingStopStep.SetDigits(0);
-   m_ipTrailingStopStep.SetMinValue(0);
+   m_ipnTrailingStopStep.SetLabel("TS Step (Points):", clrWhite);
+   m_ipnTrailingStopStep.SetValue(m_tsStepPoints);
+   m_ipnTrailingStopStep.SetStep(10);
+   m_ipnTrailingStopStep.SetDigits(0);
+   m_ipnTrailingStopStep.SetMinValue(0);
    if(m_enableTrailingStop) {
-      m_ipTrailingStopStep.UpdateDisabled(false);
+      m_ipnTrailingStopStep.UpdateDisabled(false);
    } else {
-      m_ipTrailingStopStep.UpdateDisabled(true);
+      m_ipnTrailingStopStep.UpdateDisabled(true);
    }
-   m_ipTrailingStopStep
-      .StartDraw(m_x + (m_width - 10) / 3 + 10, m_y + yOffsetPanel, (m_width - 10) / 3 - 10, 45);
+   m_ipnTrailingStopStep.StartDraw(
+      m_x + (m_width - 10) / 3 + 10,
+      m_y + yOffsetPanel,
+      (m_width - 10) / 3 - 10,
+      fontSize
+   );
 
    // Tạo ô nhập Trailing Stop Distance
 
-   m_ipTrailingStopDistance.SetLabel("TS Distance (Points):", clrWhite);
-   m_ipTrailingStopDistance.SetValue(m_tsDistancePoints);
-   m_ipTrailingStopDistance.SetStep(10);
-   m_ipTrailingStopDistance.SetDigits(0);
-   m_ipTrailingStopDistance.SetMinValue(0);
+   m_ipnTrailingStopDistance.SetLabel("TS Distance (Points):", clrWhite);
+   m_ipnTrailingStopDistance.SetValue(m_tsDistancePoints);
+   m_ipnTrailingStopDistance.SetStep(10);
+   m_ipnTrailingStopDistance.SetDigits(0);
+   m_ipnTrailingStopDistance.SetMinValue(0);
    if(m_enableTrailingStop) {
-      m_ipTrailingStopDistance.UpdateDisabled(false);
+      m_ipnTrailingStopDistance.UpdateDisabled(false);
    } else {
-      m_ipTrailingStopDistance.UpdateDisabled(true);
+      m_ipnTrailingStopDistance.UpdateDisabled(true);
    }
-   m_ipTrailingStopDistance.StartDraw(
+   m_ipnTrailingStopDistance.StartDraw(
       m_x + 2 * (m_width - 10) / 3 + 10,
       m_y + yOffsetPanel,
       (m_width - 10) / 3 - 10,
-      45
+      fontSize
    );
 
    yOffsetPanel = yOffsetPanel + 65;
@@ -492,17 +502,17 @@ void TDTabTrade::RefreshData() {
 
    double stopLossPoints = m_ipStopLossPoints.GetValue();
    double lotSize        = 0;
-   if(g_volumeType == VOLUME_TYPE_INPUT) {
+   if(g_volumeType == VOLUME_RISK_INPUT) {
       m_ipLotSize.UpdateDisabled(false);
-   } else if(g_volumeType == VOLUME_TYPE_MONEY) {
+   } else if(g_volumeType == VOLUME_RISK_MONEY) {
       m_ipLotSize.UpdateDisabled(true);
       lotSize = CalculateVolumeWithRiskMoney(g_volumeValue, stopLossPoints, _Symbol);
       m_ipLotSize.UpdateValue(lotSize);
-   } else if(g_volumeType == VOLUME_TYPE_PERCENT_BALANCE) {
+   } else if(g_volumeType == VOLUME_RISK_PERCENT_BALANCE) {
       m_ipLotSize.UpdateDisabled(true);
       lotSize = CalculateVolumeWithRiskPercentBalance(g_volumeValue, stopLossPoints, _Symbol);
       m_ipLotSize.UpdateValue(lotSize);
-   } else if(g_volumeType == VOLUME_TYPE_PERCENT_EQUITY) {
+   } else if(g_volumeType == VOLUME_RISK_PERCENT_EQUITY) {
       m_ipLotSize.UpdateDisabled(true);
       lotSize = CalculateVolumeWithRiskPercentEquity(g_volumeValue, stopLossPoints, _Symbol);
       m_ipLotSize.UpdateValue(lotSize);
@@ -527,9 +537,9 @@ void TDTabTrade::ClickBtnBuy() {
       g_positionList[size].symbol                     = _Symbol;
       g_positionList[size].type                       = POSITION_TYPE_BUY;
       g_positionList[size].enableTrailingStop         = m_enableTrailingStop;
-      g_positionList[size].trailingStopStepPoints     = m_ipTrailingStopStep.GetValue();
-      g_positionList[size].trailingStopStartPoints    = m_ipTrailingStopStart.GetValue();
-      g_positionList[size].trailingStopDistancePoints = m_ipTrailingStopDistance.GetValue();
+      g_positionList[size].trailingStopStepPoints     = m_ipnTrailingStopStep.GetValue();
+      g_positionList[size].trailingStopStartPoints    = m_ipnTrailingStopStart.GetValue();
+      g_positionList[size].trailingStopDistancePoints = m_ipnTrailingStopDistance.GetValue();
 
       Print("✓ Lệnh BUY đã được đặt thành công!");
       Print(
@@ -569,9 +579,9 @@ void TDTabTrade::ClickBtnSell() {
       g_positionList[size].symbol                     = _Symbol;
       g_positionList[size].type                       = POSITION_TYPE_SELL;
       g_positionList[size].enableTrailingStop         = m_enableTrailingStop;
-      g_positionList[size].trailingStopStepPoints     = m_ipTrailingStopStep.GetValue();
-      g_positionList[size].trailingStopStartPoints    = m_ipTrailingStopStart.GetValue();
-      g_positionList[size].trailingStopDistancePoints = m_ipTrailingStopDistance.GetValue();
+      g_positionList[size].trailingStopStepPoints     = m_ipnTrailingStopStep.GetValue();
+      g_positionList[size].trailingStopStartPoints    = m_ipnTrailingStopStart.GetValue();
+      g_positionList[size].trailingStopDistancePoints = m_ipnTrailingStopDistance.GetValue();
 
       Print("✓ Lệnh SELL đã được đặt thành công!");
       Print(
@@ -614,17 +624,17 @@ void TDTabTrade::ClickBtnCloseAllPosition() {
    m_tdTablePositions.RefreshTicketPositionsData();
 }
 
-void TDTabTrade::OnChartEvent(
+void TDTabTrade::OnRealtimeEvent(
    const int id, const long &lparam, const double &dparam, const string &sparam
 ) {
-   m_tdTablePositions.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipLotSize.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipStopLossPoints.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipTakeProfitPoints.OnChartEvent(id, lparam, dparam, sparam);
-   m_cbTrailingStopEnable.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipTrailingStopStart.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipTrailingStopStep.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipTrailingStopDistance.OnChartEvent(id, lparam, dparam, sparam);
+   m_tdTablePositions.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipLotSize.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipStopLossPoints.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipTakeProfitPoints.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipcTrailingStopEnable.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipnTrailingStopStart.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipnTrailingStopStep.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipnTrailingStopDistance.OnRealtimeEvent(id, lparam, dparam, sparam);
 
    if(id == CHARTEVENT_OBJECT_CLICK) {
       if(sparam == m_ObjBtnBuyName) {
@@ -637,15 +647,15 @@ void TDTabTrade::OnChartEvent(
    }
 }
 
-void TDTabTrade::OnMQLTesterEvent() {
-   m_tdTablePositions.OnMQLTesterEvent();
-   m_ipLotSize.OnMQLTesterEvent();
-   m_ipStopLossPoints.OnMQLTesterEvent();
-   m_ipTakeProfitPoints.OnMQLTesterEvent();
-   m_cbTrailingStopEnable.OnMQLTesterEvent();
-   m_ipTrailingStopStart.OnMQLTesterEvent();
-   m_ipTrailingStopStep.OnMQLTesterEvent();
-   m_ipTrailingStopDistance.OnMQLTesterEvent();
+void TDTabTrade::OnStrategyTesterEvent() {
+   m_tdTablePositions.OnStrategyTesterEvent();
+   m_ipLotSize.OnStrategyTesterEvent();
+   m_ipStopLossPoints.OnStrategyTesterEvent();
+   m_ipTakeProfitPoints.OnStrategyTesterEvent();
+   m_ipcTrailingStopEnable.OnStrategyTesterEvent();
+   m_ipnTrailingStopStart.OnStrategyTesterEvent();
+   m_ipnTrailingStopStep.OnStrategyTesterEvent();
+   m_ipnTrailingStopDistance.OnStrategyTesterEvent();
 
    if(uiCommon.getState(g_chartId, m_ObjBtnBuyName)) {
       ClickBtnBuy();

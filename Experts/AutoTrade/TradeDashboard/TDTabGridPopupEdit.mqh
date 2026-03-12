@@ -52,8 +52,8 @@ class TDTabGridPopupEdit {
    void HandleClickSubmit();
    void HandleClickCancel();
 
-   void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
-   void OnMQLTesterEvent();
+   void OnRealtimeEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
+   void OnStrategyTesterEvent();
 };
 
 void TDTabGridPopupEdit::StartDraw(int x, int y, int width, int height, bool isShow) {
@@ -162,7 +162,7 @@ void TDTabGridPopupEdit::OpenPopup(string gridName) {
 }
 
 void TDTabGridPopupEdit::HandleClickSubmit() {
-   uiCommon.setState(0, m_objBtnSubmitName, false);
+   uiCommon.setState(g_chartId, m_objBtnSubmitName, false);
    double sl = m_ipStopLossPrice.GetValue();
    double tp = m_ipTakeProfitPrice.GetValue();
 
@@ -221,17 +221,17 @@ void TDTabGridPopupEdit::HandleClickSubmit() {
    m_uiPanelPopup.Close();
 }
 void TDTabGridPopupEdit::HandleClickCancel() {
-   uiCommon.setState(0, m_objBtnCancelName, false);
+   uiCommon.setState(g_chartId, m_objBtnCancelName, false);
    m_isShow = false;
    m_uiPanelPopup.Close();
 }
 
-void TDTabGridPopupEdit::OnChartEvent(
+void TDTabGridPopupEdit::OnRealtimeEvent(
    const int id, const long &lparam, const double &dparam, const string &sparam
 ) {
-   m_uiPanelPopup.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipStopLossPrice.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipTakeProfitPrice.OnChartEvent(id, lparam, dparam, sparam);
+   m_uiPanelPopup.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipStopLossPrice.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipTakeProfitPrice.OnRealtimeEvent(id, lparam, dparam, sparam);
 
    if(id == CHARTEVENT_OBJECT_CLICK) {
       if(sparam == m_objBtnSubmitName) {
@@ -242,10 +242,10 @@ void TDTabGridPopupEdit::OnChartEvent(
    }
 }
 
-void TDTabGridPopupEdit::OnMQLTesterEvent() {
-   m_uiPanelPopup.OnMQLTesterEvent();
-   m_ipStopLossPrice.OnMQLTesterEvent();
-   m_ipTakeProfitPrice.OnMQLTesterEvent();
+void TDTabGridPopupEdit::OnStrategyTesterEvent() {
+   m_uiPanelPopup.OnStrategyTesterEvent();
+   m_ipStopLossPrice.OnStrategyTesterEvent();
+   m_ipTakeProfitPrice.OnStrategyTesterEvent();
 
    if(uiCommon.getState(g_chartId, m_objBtnSubmitName)) {
       HandleClickSubmit();

@@ -1,33 +1,37 @@
 //+------------------------------------------------------------------+
-//|                                              UIInputText.mqh   |
+//|                                              UIInputDateTime.mqh   |
 //+------------------------------------------------------------------+
-//|                                              UIInputText.mqh   |
+//|                                              UIInputDateTime.mqh   |
 //+------------------------------------------------------------------+
-#ifndef UI_INPUT_TEXT_MQH
-#define UI_INPUT_TEXT_MQH
+#ifndef UI_INPUT_DATE_TIME_MQH
+#define UI_INPUT_DATE_TIME_MQH
 
-#property copyright "UIInputText Library"
+#property copyright "UIInputDateTime Library"
 #property version "1.00"
 
 #include <AutoTrade/UI/UIDefines.mqh>
 
 //+------------------------------------------------------------------+
-//| Class UIInputText                                              |
+//| Class UIInputDateTime                                              |
 //+------------------------------------------------------------------+
 
-class UIInputText {
+class UIInputDateTime {
  private:
-   long   m_chartId;    // ID của chart
-   string m_name;       // Tên unique cho control
-   int    m_x;          // Vị trí X
-   int    m_y;          // Vị trí Y
-   int    m_width;      // Chiều rộng input
-   int    m_fontSize;   // Kích thước font
-   string m_value;
-   string m_labelText;  // Text label (nếu có)
-   int    m_zOrderBase; // Z-order base for drawing objects of this control
-   bool   m_isDisabled;
-   bool   m_isTester;   // Có đang chạy ở môi trường tester không
+   UIListener *m_listener;
+   FOnChange   m_callback;
+   void       *m_parent;     // lưu pointer đến object chủ
+
+   long        m_chartId;    // ID của chart
+   string      m_name;       // Tên unique cho control
+   int         m_x;          // Vị trí X
+   int         m_y;          // Vị trí Y
+   int         m_width;      // Chiều rộng input
+   int         m_fontSize;   // Kích thước font
+   string      m_valueString;
+   string      m_labelText;  // Text label (nếu có)
+   int         m_zOrderBase; // Z-order base for drawing objects of this control
+   bool        m_isDisabled;
+   bool        m_isTester;   // Có đang chạy ở môi trường tester không
 
    // Màu sắc
    color m_clrLabelText;  // Màu label
@@ -39,22 +43,17 @@ class UIInputText {
    string m_objLabelName;
 
  public:
-   UIInputText() {}
-   ~UIInputText() { Destroy(); }
-   // Xóa control
-   void Destroy() {
-      ObjectDelete(m_chartId, m_objInputName);
-      ObjectDelete(m_chartId, m_objLabelName);
-   }
+   UIInputDateTime() {}
+   ~UIInputDateTime() { DeleteAllObject(); }
 
    void Initialize(long chartId, string name) {
-      m_chartId    = chartId;
-      m_name       = name;
-      m_fontSize   = 10;
-      m_value      = "";
-      m_labelText  = "";
-      m_zOrderBase = 0;
-      m_isDisabled = false;
+      m_chartId     = chartId;
+      m_name        = name;
+      m_fontSize    = 10;
+      m_valueString = "";
+      m_labelText   = "";
+      m_zOrderBase  = 0;
+      m_isDisabled  = false;
 
       if((bool)MQLInfoInteger(MQL_TESTER) || (bool)MQLInfoInteger(MQL_VISUAL_MODE)) {
          m_isTester = true;
@@ -62,7 +61,7 @@ class UIInputText {
          m_isTester = false;
       }
 
-      m_clrLabelText  = clrBlack;
+      m_clrLabelText  = clrWhite;
       m_clrBackground = clrWhite;
       m_clrBorder     = clrDarkGray;
 
@@ -71,14 +70,40 @@ class UIInputText {
       m_objInputName = "Obj_" + m_name + "_Input";
    }
 
-   // Getters
-   string GetValue() { return m_value; }
-   int    GetObjectNameList(string &objNameList[]) {
+   void SetListener(UIListener *listener) { m_listener = listener; };
+   void SetCallback(void *ctx, FOnChange cb) {
+      m_callback = cb;
+      m_parent   = ctx;
+   }
+
+   void EmitValue() {
+      datetime valueTime = StringToTime(m_valueString);
+      if(m_listener != NULL) {
+         m_listener.listen(&this, UI_EVENT_CHANGE_VALUE, valueTime);
+      }
+      if(m_callback != NULL) {
+         m_callback(m_parent, UI_EVENT_CHANGE_VALUE, valueTime);
+      }
+   }
+
+   int GetObjectNameList(string &objNameList[]) {
       ArrayResize(objNameList, 2);
       objNameList[0] = m_objLabelName;
       objNameList[1] = m_objInputName;
       return 2;
    }
+
+   void DeleteAllObject() {
+      string objNameList[];
+      int    countObject = GetObjectNameList(objNameList);
+      for(int i = 0; i < countObject; i++) {
+         ObjectDelete(m_chartId, objNameList[i]);
+      }
+   }
+
+   // Getters
+   string   GetValueString() { return m_valueString; }
+   datetime GetValueTime() { return StringToTime(m_valueString); }
 
    // Setters
    void SetWidth(int width) { m_width = width; }
@@ -89,16 +114,24 @@ class UIInputText {
       }
    }
    void SetFontSize(int size) { m_fontSize = size; }
-   void SetValue(string value) { m_value = value; }
+   void SetValueString(string value) { m_valueString = value; }
+   void SetValueTime(datetime value) { m_valueString = TimeToString(value); }
    void SetZOrderBase(int zOrderBase) { m_zOrderBase = zOrderBase; }
    void SetDisabled(bool isDisabled) { m_isDisabled = isDisabled; }
    void SetBackgroundColor(color clr) { m_clrBackground = clr; }
    void SetBorderColor(color clr) { m_clrBorder = clr; }
 
-   void UpdateValue(string value) {
-      if(value != m_value) {
-         m_value = value;
-         ObjectSetString(m_chartId, m_objInputName, OBJPROP_TEXT, m_value);
+   void UpdateValueString(string value) {
+      if(value != m_valueString) {
+         m_valueString = value;
+         ObjectSetString(m_chartId, m_objInputName, OBJPROP_TEXT, m_valueString);
+      }
+   }
+   void UpdateValueTime(datetime value) {
+      string valueString = TimeToString(value);
+      if(valueString != m_valueString) {
+         m_valueString = valueString;
+         ObjectSetString(m_chartId, m_objInputName, OBJPROP_TEXT, m_valueString);
       }
    }
 
@@ -129,13 +162,14 @@ class UIInputText {
    }
 
    void StartDraw(int x, int y, int width, int height);
+   void HandleChangeInputValue();
    void OnRealtimeEvent(
       const int id, const long &lparam, const double &dparam, const string &sparam
    );
    void OnStrategyTesterEvent();
 };
 
-void UIInputText::StartDraw(int x, int y, int width, int fontSize) {
+void UIInputDateTime::StartDraw(int x, int y, int width, int fontSize) {
    m_x             = x;
    m_y             = y;
    m_width         = width;
@@ -175,7 +209,7 @@ void UIInputText::StartDraw(int x, int y, int width, int fontSize) {
    ObjectSetInteger(m_chartId, m_objInputName, OBJPROP_XDISTANCE, m_x);
    ObjectSetInteger(m_chartId, m_objInputName, OBJPROP_YDISTANCE, m_y + yOffset);
    ObjectSetInteger(m_chartId, m_objInputName, OBJPROP_XSIZE, m_width);
-   ObjectSetString(m_chartId, m_objInputName, OBJPROP_TEXT, m_value);
+   ObjectSetString(m_chartId, m_objInputName, OBJPROP_TEXT, m_valueString);
    ObjectSetInteger(m_chartId, m_objInputName, OBJPROP_READONLY, m_isTester || m_isDisabled);
    ObjectSetInteger(m_chartId, m_objInputName, OBJPROP_YSIZE, (int)(m_fontSize * rateSize));
    ObjectSetString(m_chartId, m_objInputName, OBJPROP_FONT, "Arial");
@@ -191,20 +225,24 @@ void UIInputText::StartDraw(int x, int y, int width, int fontSize) {
    ObjectSetInteger(m_chartId, m_objInputName, OBJPROP_HIDDEN, true);
 }
 
-void UIInputText::OnRealtimeEvent(
+void UIInputDateTime::HandleChangeInputValue() {
+   string text = ObjectGetString(m_chartId, m_objInputName, OBJPROP_TEXT);
+   SetValueString(text);
+}
+
+void UIInputDateTime::OnRealtimeEvent(
    const int id, const long &lparam, const double &dparam, const string &sparam
 ) {
    // Xử lý khi user nhập tay vào input
    if(id == CHARTEVENT_OBJECT_ENDEDIT) {
       if(sparam == m_objInputName) {
-         string text = ObjectGetString(m_chartId, m_objInputName, OBJPROP_TEXT);
-         SetValue(text);
+         HandleChangeInputValue();
       }
    }
 }
 
-void UIInputText::OnStrategyTesterEvent() {
+void UIInputDateTime::OnStrategyTesterEvent() {
    // Không có sự kiện nào đặc biệt cần xử lý trong tester cho control này
 }
 
-#endif // UI_INPUT_TEXT_MQH
+#endif // UI_INPUT_DATE_TIME_MQH

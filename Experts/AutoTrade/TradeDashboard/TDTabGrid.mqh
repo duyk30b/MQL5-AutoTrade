@@ -9,7 +9,7 @@
 #include <AutoTrade/UI/UITable.mqh>
 #include <AutoTrade/Utils/UtilString.mqh>
 
-class TDTabGrid {
+class TDTabGrid : public UIListener {
  private:
    int                m_x;
    int                m_y;
@@ -18,8 +18,8 @@ class TDTabGrid {
    int                m_gridIndex;
    bool               m_enableCustomPrice;
 
-   double             m_volumeValue;
-   ENUM_VOLUME_TYPE   m_volumeType;
+   double             m_volumeRiskValue;
+   ENUM_VOLUME_RISK   m_volumeRiskType;
 
    TDTabGridPopupEdit m_popupEdit;
 
@@ -52,9 +52,8 @@ class TDTabGrid {
    UIInputNumber      m_ipGridTakeProfitPoints;
 
    UIInputNumber      m_ipnBaseLot;
-   string             m_objLabelTotalVolumeExpected;
-   UIInputSelect      m_ipsVolumeType;
-   UIInputNumber      m_ipnVolumeValue;
+   UIInputSelect      m_ipsVolumeRiskType;
+   UIInputNumber      m_ipnVolumeRiskValue;
 
    UIInputCheckbox    m_ipcTrailingStopEnable;
    bool               m_enableTrailingStop;
@@ -65,6 +64,8 @@ class TDTabGrid {
 
    string             m_ObjBtnStartGridName;
    string             m_lineAverageOpenPriceName;
+   string             m_lineTSPeakPriceName;
+   string             m_lineTSStopLossPriceName;
 
  public:
    TDTabGrid() {}
@@ -74,15 +75,19 @@ class TDTabGrid {
       ObjectDelete(g_chartId, m_btnCloseGrid);
       ObjectDelete(g_chartId, m_labelTotalProfit);
       ObjectDelete(g_chartId, m_ObjLabelGridTypeName);
-      ObjectDelete(g_chartId, m_objLabelTotalVolumeExpected);
       ObjectDelete(g_chartId, m_ObjBtnStartGridName);
       ObjectDelete(g_chartId, m_lineAverageOpenPriceName);
+      ObjectDelete(g_chartId, m_lineTSPeakPriceName);
+      ObjectDelete(g_chartId, m_lineTSStopLossPriceName);
    }
 
    void Initialize() {
       m_enableCustomPrice = false;
 
-      m_ipSelectGrid.SetCallback(&this, TDTabGrid::OnChangeSelectGrid);
+      // Chỉ dùng 1 trong 2 cách: Dùng listener hoặc callback
+      // m_ipSelectGrid.SetCallback(&this, TDTabGrid::OnChangeSelectGrid);
+      m_ipSelectGrid.SetListener(&this);
+
       m_table.SetCallback(&this, TDTabGrid::OnTableChange);
       m_irGridTypeGroup.SetCallback(&this, TDTabGrid::OnInputRadioChangeGridType);
 
@@ -93,8 +98,8 @@ class TDTabGrid {
       m_ipGridStopLossPoints.SetCallback(&this, TDTabGrid::OnChangeStopLossPoints);
       m_ipGridTakeProfitPoints.SetCallback(&this, TDTabGrid::OnChangeTakeProfitPoints);
 
-      m_ipsVolumeType.SetCallback(&this, TDTabGrid::OnChangeVolumeType);
-      m_ipnVolumeValue.SetCallback(&this, TDTabGrid::OnChangeVolumeValue);
+      m_ipsVolumeRiskType.SetCallback(&this, TDTabGrid::OnChangeVolumeRiskType);
+      m_ipnVolumeRiskValue.SetCallback(&this, TDTabGrid::OnChangeVolumeRiskValue);
       m_ipnBaseLot.SetCallback(&this, TDTabGrid::OnChangeBaseLot);
 
       m_ipcTrailingStopEnable.SetCallback(&this, TDTabGrid::OnChangeCheckboxTrailingStopEnable);
@@ -133,6 +138,7 @@ class TDTabGrid {
       m_labelTotalProfit     = "TDTabGrid_LabelTotalProfit";
 
       m_ObjLabelGridTypeName = "TDTabGrid_LabelGridType";
+      m_irGridTypeGroup.Initialize("TDTabGrid_IrGridTypeGroup");
       m_irGridTypeGroup.AddInputRadio(&m_irGridTypeBuy);
       m_irGridTypeGroup.AddInputRadio(&m_irGridTypeSell);
       m_irGridTypeBuy.Initialize(g_chartId, "TDTabGrid_IpRadioGridBuy");
@@ -147,31 +153,45 @@ class TDTabGrid {
       m_ipGridStopLossPoints.Initialize(g_chartId, "TDTabGrid_IpGridStopLossPoints");
       m_ipGridTakeProfitPoints.Initialize(g_chartId, "TDTabGrid_IpGridTakeProfitPoints");
 
-      m_ipsVolumeType.Initialize(g_chartId, "TDTabGrid_IpsVolumeType");
-      m_ipsVolumeType.AddOption(VOLUME_TYPE_INPUT, "Input");
-      m_ipsVolumeType.AddOption(VOLUME_TYPE_MONEY, "Money");
-      m_ipsVolumeType.AddOption(VOLUME_TYPE_PERCENT_BALANCE, "% Balance");
-      m_ipsVolumeType.AddOption(VOLUME_TYPE_PERCENT_EQUITY, "% Equity");
+      m_ipsVolumeRiskType.Initialize(g_chartId, "TDTabGrid_IpsVolumeType");
+      m_ipsVolumeRiskType.AddOption(VOLUME_RISK_INPUT, "Input");
+      m_ipsVolumeRiskType.AddOption(VOLUME_RISK_MONEY, "Money");
+      m_ipsVolumeRiskType.AddOption(VOLUME_RISK_PERCENT_BALANCE, "% Balance");
+      m_ipsVolumeRiskType.AddOption(VOLUME_RISK_PERCENT_EQUITY, "% Equity");
       m_ipnBaseLot.Initialize(g_chartId, "TDTabGrid_IpGridBaseLot");
-      m_objLabelTotalVolumeExpected = "TDTabGrid_objLabelTotalVolumeExpected";
-      m_ipnVolumeValue.Initialize(g_chartId, "TDTabGrid_IpnVolumeValue");
+      m_ipnVolumeRiskValue.Initialize(g_chartId, "TDTabGrid_IpnVolumeValue");
 
       m_ipcTrailingStopEnable.Initialize(g_chartId, "TDTabGrid_IpcTrailingStopEnable");
       m_ipnTrailingStopStart.Initialize(g_chartId, "TDTabGrid_IpnTrailingStopStart");
       m_ipnTrailingStopStep.Initialize(g_chartId, "TDTabGrid_IpnTrailingStopStep");
       m_ipnTrailingStopDistance.Initialize(g_chartId, "TDTabGrid_IpnTrailingStopDistance");
 
-      m_ObjBtnStartGridName      = "TDTabGrid_BtnStartGrid";
-      m_lineAverageOpenPriceName = "TDTabGrid_LineAverageOpenPrice";
+      m_ObjBtnStartGridName      = "Obj_TDTabGrid_BtnStartGrid";
+      m_lineAverageOpenPriceName = "Obj_TDTabGrid_LineAverageOpenPrice";
+      m_lineTSPeakPriceName      = "Obj_TDTabGrid_LineTSPeakPrice";
+      m_lineTSStopLossPriceName  = "Obj_TDTabGrid_LineTSStopLossPrice";
    }
 
-   static void OnChangeSelectGrid(void *context, UI_EVENT_TYPE eventType, double value) {
-      TDTabGrid *self = (TDTabGrid *)context;
-      if(eventType == UI_EVENT_CHANGE_VALUE) {
-         self.m_gridIndex = (int)value;
-         self.RefreshData();
+   // Dùng 1 trong 2 cách: Listener hoặc Callback
+   virtual void listen(void *child, UI_EVENT_TYPE type, double value) override {
+      // Print("TDTabGrid listen: type=", type, " value=", value, " child=", child);
+      // Print("m_ipSelectGrid: ", &m_ipSelectGrid);
+
+      if(child == &m_ipSelectGrid) {
+         if(type == UI_EVENT_CHANGE_VALUE) {
+            m_gridIndex = (int)value;
+            RefreshData();
+         }
       }
    }
+
+   // static void OnChangeSelectGrid(void *context, UI_EVENT_TYPE eventType, double value) {
+   //    TDTabGrid *self = (TDTabGrid *)context;
+   //    if(eventType == UI_EVENT_CHANGE_VALUE) {
+   //       self.m_gridIndex = (int)value;
+   //       self.RefreshData();
+   //    }
+   // }
 
    static void OnTableChange(void *context, UI_EVENT_TYPE eventType, double value) {
       TDTabGrid *self = (TDTabGrid *)context;
@@ -191,20 +211,24 @@ class TDTabGrid {
    static void OnChangePositionSize(void *context, UI_EVENT_TYPE eventType, double value) {
       TDTabGrid *self = (TDTabGrid *)context;
       if(eventType == UI_EVENT_CHANGE_VALUE) {
-         if(self.m_volumeType != VOLUME_TYPE_INPUT) {
+         if(self.m_volumeRiskType == VOLUME_RISK_INPUT) {
+            self.RefreshIpnVolumeRiskValueLabel();
+         } else {
             self.RefreshInputBaselot();
          }
-         self.syncTotalLotExpected();
+         self.RefreshIpnBaseLotLabel();
       }
    }
 
    static void OnChangeNextLotMultiplier(void *context, UI_EVENT_TYPE eventType, double value) {
       TDTabGrid *self = (TDTabGrid *)context;
       if(eventType == UI_EVENT_CHANGE_VALUE) {
-         if(self.m_volumeType != VOLUME_TYPE_INPUT) {
+         if(self.m_volumeRiskType == VOLUME_RISK_INPUT) {
+            self.RefreshIpnVolumeRiskValueLabel();
+         } else {
             self.RefreshInputBaselot();
          }
-         self.syncTotalLotExpected();
+         self.RefreshIpnBaseLotLabel();
       }
    }
 
@@ -226,8 +250,11 @@ class TDTabGrid {
    static void OnChangeStopLossPoints(void *context, UI_EVENT_TYPE eventType, double value) {
       TDTabGrid *self = (TDTabGrid *)context;
       if(eventType == UI_EVENT_CHANGE_VALUE) {
-         if(self.m_volumeType != VOLUME_TYPE_INPUT) {
+         if(self.m_volumeRiskType == VOLUME_RISK_INPUT) {
+            self.RefreshIpnVolumeRiskValueLabel();
+         } else {
             self.RefreshInputBaselot();
+            self.RefreshIpnBaseLotLabel();
          }
       }
    }
@@ -237,49 +264,51 @@ class TDTabGrid {
       if(eventType == UI_EVENT_CHANGE_VALUE) {}
    }
 
-   static void OnChangeVolumeType(void *context, UI_EVENT_TYPE eventType, double value) {
+   static void OnChangeVolumeRiskType(void *context, UI_EVENT_TYPE eventType, double value) {
       TDTabGrid *self = (TDTabGrid *)context;
       if(eventType == UI_EVENT_CHANGE_VALUE) {
-         self.m_volumeType = (ENUM_VOLUME_TYPE)(int)value;
+         self.m_volumeRiskType = (ENUM_VOLUME_RISK)(int)value;
 
-         if(int(value) == VOLUME_TYPE_INPUT) {
-            self.m_ipnVolumeValue.UpdateLabel("Risk: --");
-            self.m_ipnVolumeValue.UpdateDisabled(true);
+         if(int(value) == VOLUME_RISK_INPUT) {
+            self.m_ipnVolumeRiskValue.UpdateLabel("SL Money ($)");
+            self.m_ipnVolumeRiskValue.UpdateDisabled(true);
             self.m_ipnBaseLot.UpdateDisabled(false);
          }
-         if(int(value) == VOLUME_TYPE_MONEY) {
-            self.m_ipnVolumeValue.UpdateLabel("Risk: Money ($)");
-            self.m_ipnVolumeValue.UpdateDisabled(false);
+         if(int(value) == VOLUME_RISK_MONEY) {
+            self.m_ipnVolumeRiskValue.UpdateLabel("Risk: Money ($)");
+            self.m_ipnVolumeRiskValue.UpdateDisabled(false);
             self.m_ipnBaseLot.UpdateDisabled(true);
          }
-         if(int(value) == VOLUME_TYPE_PERCENT_BALANCE) {
-            self.m_ipnVolumeValue.UpdateLabel("Risk: % Balance");
-            self.m_ipnVolumeValue.UpdateDisabled(false);
+         if(int(value) == VOLUME_RISK_PERCENT_BALANCE) {
+            self.m_ipnVolumeRiskValue.UpdateLabel("Risk: % Balance");
+            self.m_ipnVolumeRiskValue.UpdateDisabled(false);
             self.m_ipnBaseLot.UpdateDisabled(true);
          }
-         if(int(value) == VOLUME_TYPE_PERCENT_EQUITY) {
-            self.m_ipnVolumeValue.UpdateLabel("Risk: % Equity");
-            self.m_ipnVolumeValue.UpdateDisabled(false);
+         if(int(value) == VOLUME_RISK_PERCENT_EQUITY) {
+            self.m_ipnVolumeRiskValue.UpdateLabel("Risk: % Equity");
+            self.m_ipnVolumeRiskValue.UpdateDisabled(false);
             self.m_ipnBaseLot.UpdateDisabled(true);
          }
-         self.m_ipnVolumeValue.UpdateValue(0);
-         self.syncTotalLotExpected();
+         self.m_ipnVolumeRiskValue.UpdateValue(0);
+         self.m_ipnBaseLot.UpdateValue(0);
+         self.m_ipnBaseLot.UpdateLabel("Base Lot:     (Auto)");
       }
    }
 
    static void OnChangeBaseLot(void *context, UI_EVENT_TYPE eventType, double value) {
       TDTabGrid *self = (TDTabGrid *)context;
       if(eventType == UI_EVENT_CHANGE_VALUE) {
-         self.syncTotalLotExpected();
+         self.RefreshIpnVolumeRiskValueLabel();
+         self.RefreshIpnBaseLotLabel();
       }
    }
 
-   static void OnChangeVolumeValue(void *context, UI_EVENT_TYPE eventType, double value) {
+   static void OnChangeVolumeRiskValue(void *context, UI_EVENT_TYPE eventType, double value) {
       TDTabGrid *self = (TDTabGrid *)context;
       if(eventType == UI_EVENT_CHANGE_VALUE) {
-         self.m_volumeValue = value;
+         self.m_volumeRiskValue = value;
          self.RefreshInputBaselot();
-         self.syncTotalLotExpected();
+         self.RefreshIpnBaseLotLabel();
       }
    }
 
@@ -341,13 +370,14 @@ class TDTabGrid {
          = m_ipGridTakeProfitPoints.GetObjectNameList(ipGridTakeProfitPointsObjNameList);
 
       string ipsVolumeTypeObjNameList[];
-      int    ipsVolumeTypeObjCount = m_ipsVolumeType.GetObjectNameList(ipsVolumeTypeObjNameList);
+      int ipsVolumeTypeObjCount = m_ipsVolumeRiskType.GetObjectNameList(ipsVolumeTypeObjNameList);
 
       string ipnBaseLotObjNameList[];
       int    ipnBaseLotObjCount = m_ipnBaseLot.GetObjectNameList(ipnBaseLotObjNameList);
 
       string ipnVolumeValueObjNameList[];
-      int    ipnVolumeValueObjCount = m_ipnVolumeValue.GetObjectNameList(ipnVolumeValueObjNameList);
+      int    ipnVolumeValueObjCount
+         = m_ipnVolumeRiskValue.GetObjectNameList(ipnVolumeValueObjNameList);
 
       string ipcTrailingStopEnableObjNameList[];
       int    ipcTrailingStopEnableObjCount
@@ -368,9 +398,9 @@ class TDTabGrid {
          ipSelectGridObjCount + 3 + tableObjCount + 1 + 1 + irGridTypeGroupObjCount
             + iptGridNameObjCount + ipGridPositionSizeObjCount + ipGridNextLotMultiplierObjCount
             + ipnGridEntryPriceObjCount + ipcCustomEntryPriceObjCount + ipGridStopLossPointsObjCount
-            + ipGridTakeProfitPointsObjCount + ipsVolumeTypeObjCount + ipnBaseLotObjCount + 1
+            + ipGridTakeProfitPointsObjCount + ipsVolumeTypeObjCount + ipnBaseLotObjCount
             + ipnVolumeValueObjCount + ipcTrailingStopEnableObjCount + ipnTrailingStopStartObjCount
-            + ipnTrailingStopStepObjCount + ipnTrailingStopDistanceObjCount + 1 + 1
+            + ipnTrailingStopStepObjCount + ipnTrailingStopDistanceObjCount + 1 + 3
       );
 
       for(int i = 0; i < ipSelectGridObjCount; i++) {
@@ -422,7 +452,6 @@ class TDTabGrid {
       for(int i = 0; i < ipnBaseLotObjCount; i++) {
          objNameList[count++] = ipnBaseLotObjNameList[i];
       }
-      objNameList[count++] = m_objLabelTotalVolumeExpected;
 
       for(int i = 0; i < ipnVolumeValueObjCount; i++) {
          objNameList[count++] = ipnVolumeValueObjNameList[i];
@@ -443,27 +472,19 @@ class TDTabGrid {
 
       objNameList[count++] = m_ObjBtnStartGridName;
       objNameList[count++] = m_lineAverageOpenPriceName;
+      objNameList[count++] = m_lineTSPeakPriceName;
+      objNameList[count++] = m_lineTSStopLossPriceName;
 
       return count;
    }
 
-   double calcTotalLotExpected(double baseLot, double nextLotMultiplier, int positionSize) {
+   double CalcTotalLotExpected(double baseLot, double nextLotMultiplier, int positionSize) {
       double totalLotExpected = 0;
       for(int i = 0; i < positionSize; i++) {
          double lot        = baseLot * MathPow(nextLotMultiplier, i);
          totalLotExpected += lot;
       }
       return totalLotExpected;
-   }
-
-   void syncTotalLotExpected() {
-      double baseLot           = m_ipnBaseLot.GetValue();
-      double nextLotMultiplier = m_ipGridNextLotMultiplier.GetValue();
-      int    positionSize      = (int)m_ipGridPositionSize.GetValue();
-
-      double totalLotExpected  = calcTotalLotExpected(baseLot, nextLotMultiplier, positionSize);
-      string label             = "(∑: " + DoubleToString(totalLotExpected, 2) + ")";
-      uiCommon.setText(g_chartId, m_objLabelTotalVolumeExpected, label);
    }
 
    double CalcMaxPointLoss(
@@ -501,20 +522,20 @@ class TDTabGrid {
    }
 
    void RefreshInputBaselot() {
-      if(m_volumeType == VOLUME_TYPE_INPUT) {
+      if(m_volumeRiskType == VOLUME_RISK_INPUT) {
          return;
       }
       double riskMoney           = 0;
       double baseLot             = 0;
       double allowedMaxPointLoss = 0;
-      if(m_volumeType == VOLUME_TYPE_MONEY) {
-         riskMoney = m_volumeValue;
+      if(m_volumeRiskType == VOLUME_RISK_MONEY) {
+         riskMoney = m_volumeRiskValue;
       }
-      if(m_volumeType == VOLUME_TYPE_PERCENT_BALANCE) {
-         riskMoney = AccountInfoDouble(ACCOUNT_BALANCE) * m_volumeValue / 100.0;
+      if(m_volumeRiskType == VOLUME_RISK_PERCENT_BALANCE) {
+         riskMoney = AccountInfoDouble(ACCOUNT_BALANCE) * m_volumeRiskValue / 100.0;
       }
-      if(m_volumeType == VOLUME_TYPE_PERCENT_EQUITY) {
-         riskMoney = AccountInfoDouble(ACCOUNT_EQUITY) * m_volumeValue / 100.0;
+      if(m_volumeRiskType == VOLUME_RISK_PERCENT_EQUITY) {
+         riskMoney = AccountInfoDouble(ACCOUNT_EQUITY) * m_volumeRiskValue / 100.0;
       }
       double point         = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
       double tickSize      = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
@@ -532,6 +553,37 @@ class TDTabGrid {
       m_ipnBaseLot.UpdateValue(baseLot);
    }
 
+   void RefreshIpnVolumeRiskValueLabel() {
+      if(m_volumeRiskType != VOLUME_RISK_INPUT) {
+         return;
+      }
+      double baseLot        = m_ipnBaseLot.GetValue();
+      double point          = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+      double tickSize       = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
+      double tickValue      = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+      double valuePerPoint  = tickValue / tickSize * point;
+
+      double totalPointLoss = CalcMaxPointLoss(
+         baseLot,
+         m_ipGridNextLotMultiplier.GetValue(),
+         (int)m_ipGridPositionSize.GetValue(),
+         (int)m_ipGridStopLossPoints.GetValue()
+      );
+      double riskMoney = totalPointLoss * valuePerPoint;
+      string label     = "SL Money: " + DoubleToString(riskMoney, 2) + "$";
+      m_ipnVolumeRiskValue.UpdateLabel(label);
+   }
+
+   void RefreshIpnBaseLotLabel() {
+      double baseLot           = m_ipnBaseLot.GetValue();
+      double nextLotMultiplier = m_ipGridNextLotMultiplier.GetValue();
+      int    positionSize      = (int)m_ipGridPositionSize.GetValue();
+
+      double totalLotExpected  = CalcTotalLotExpected(baseLot, nextLotMultiplier, positionSize);
+      string label             = "(Σ: " + DoubleToString(totalLotExpected, 2) + ")";
+      m_ipnBaseLot.UpdateLabel("Base Lot:     " + label);
+   }
+
    void OpenTab(int x, int y, int width, int height);
    void StartDraw(int x, int y, int width, int height);
    void DestroyDraw();
@@ -541,8 +593,8 @@ class TDTabGrid {
    void ClickBtnEditGrid();
    void ClickBtnCloseGrid();
    void ClickBtnStartGrid();
-   void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
-   void OnMQLTesterEvent();
+   void OnRealtimeEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
+   void OnStrategyTesterEvent();
 };
 
 void TDTabGrid::OpenTab(int x, int y, int width, int height) {
@@ -557,10 +609,10 @@ void TDTabGrid::OpenTab(int x, int y, int width, int height) {
    StartDraw(x, y, width, height);
    m_irGridTypeGroup.SetValue(GRID_TYPE_BUY);
    m_ipGridPositionSize.UpdateValue(4);
-   m_ipGridNextLotMultiplier.UpdateValue(2);
+   m_ipGridNextLotMultiplier.UpdateValue(1);
    m_ipnGridEntryPrice.UpdateValue(bid);
-   m_ipGridStopLossPoints.UpdateValue(2000);
-   m_ipGridTakeProfitPoints.UpdateValue(4000);
+   m_ipGridStopLossPoints.UpdateValue(3000);
+   m_ipGridTakeProfitPoints.UpdateValue(10000);
    m_ipnBaseLot.UpdateDisabled(false);
    m_ipnBaseLot.UpdateValue(0.01);
 
@@ -573,10 +625,13 @@ void TDTabGrid::StartDraw(int x, int y, int width, int height) {
    m_y              = y;
    m_width          = width;
    m_height         = height;
+
+   int fontSize     = 10;
+
    int yOffsetPanel = 10;
 
    m_ipSelectGrid.SetZOrderBase(100);
-   m_ipSelectGrid.StartDraw(m_x + 10, m_y + yOffsetPanel, 90, 10);
+   m_ipSelectGrid.StartDraw(m_x + 10, m_y + yOffsetPanel, 90, fontSize);
 
    uiCommon.CreateLabel(
       g_chartId,
@@ -584,7 +639,7 @@ void TDTabGrid::StartDraw(int x, int y, int width, int height) {
       "Grid Info:",
       m_x + 110,
       m_y + yOffsetPanel + 4,
-      8,
+      fontSize - 2,
       clrWhite
    );
    uiCommon.setZOrder(g_chartId, m_labelGridInfo, 100);
@@ -598,7 +653,7 @@ void TDTabGrid::StartDraw(int x, int y, int width, int height) {
       70,
       20
    );
-   uiCommon.setFontSize(g_chartId, m_btnEditGrid, 8);
+   uiCommon.setFontSize(g_chartId, m_btnEditGrid, fontSize - 2);
    uiCommon.setZOrder(g_chartId, m_btnEditGrid, 100);
 
    uiCommon.CreateButton(
@@ -610,7 +665,7 @@ void TDTabGrid::StartDraw(int x, int y, int width, int height) {
       70,
       20
    );
-   uiCommon.setFontSize(g_chartId, m_btnCloseGrid, 8);
+   uiCommon.setFontSize(g_chartId, m_btnCloseGrid, fontSize - 2);
    uiCommon.setZOrder(g_chartId, m_btnCloseGrid, 100);
 
    yOffsetPanel += 25;
@@ -624,7 +679,7 @@ void TDTabGrid::StartDraw(int x, int y, int width, int height) {
       "Total Profit: 0",
       m_x + 250,
       m_y + yOffsetPanel - 30,
-      8,
+      fontSize - 2,
       clrWhite
    );
    uiCommon.setZOrder(g_chartId, m_labelTotalProfit, 100);
@@ -636,25 +691,25 @@ void TDTabGrid::StartDraw(int x, int y, int width, int height) {
       "Grid Type:",
       m_x + 10,
       m_y + yOffsetPanel,
-      10,
+      fontSize,
       clrWhite
    );
    uiCommon.setZOrder(g_chartId, m_ObjLabelGridTypeName, 100);
 
    m_irGridTypeBuy.SetValue(GRID_TYPE_BUY);
    m_irGridTypeBuy.SetChecked(m_gridType == GRID_TYPE_BUY);
-   m_irGridTypeBuy.StartDraw(m_x + 100, m_y + yOffsetPanel, "Grid Buy", 10);
+   m_irGridTypeBuy.StartDraw(m_x + 100, m_y + yOffsetPanel, "Grid Buy", fontSize);
 
    m_irGridTypeSell.SetValue(GRID_TYPE_SELL);
    m_irGridTypeSell.SetChecked(m_gridType == GRID_TYPE_SELL);
-   m_irGridTypeSell.StartDraw(m_x + 200, m_y + yOffsetPanel, "Grid Sell", 10);
+   m_irGridTypeSell.StartDraw(m_x + 200, m_y + yOffsetPanel, "Grid Sell", fontSize);
 
    yOffsetPanel += 30;
 
    // Create input for grid name
    m_iptGridName.SetLabel("Grid Name:", clrWhite);
    m_iptGridName.SetZOrderBase(101);
-   m_iptGridName.StartDraw(m_x + 10, m_y + yOffsetPanel, (m_width - 40) / 3, 10);
+   m_iptGridName.StartDraw(m_x + 10, m_y + yOffsetPanel, (m_width - 40) / 3, fontSize);
 
    // Create grid position size, base lot và next lot multiplier
    m_ipGridPositionSize.SetLabel("Position Size:", clrWhite);
@@ -663,15 +718,19 @@ void TDTabGrid::StartDraw(int x, int y, int width, int height) {
    m_ipGridPositionSize.SetValue(1);
    m_ipGridPositionSize.SetMinValue(1);
    m_ipGridPositionSize
-      .StartDraw(m_x + ((m_width - 40) / 3) + 20, m_y + yOffsetPanel, (m_width - 40) / 3, 40);
+      .StartDraw(m_x + ((m_width - 40) / 3) + 20, m_y + yOffsetPanel, (m_width - 40) / 3, fontSize);
 
    m_ipGridNextLotMultiplier.SetLabel("Next Lot Multiplier:", clrWhite);
    m_ipGridNextLotMultiplier.SetStep(0.1);
    m_ipGridNextLotMultiplier.SetDigits(1);
    m_ipGridNextLotMultiplier.SetValue(1.5);
    m_ipGridNextLotMultiplier.SetMinValue(1.0);
-   m_ipGridNextLotMultiplier
-      .StartDraw(m_x + 2 * ((m_width - 40) / 3) + 30, m_y + yOffsetPanel, (m_width - 40) / 3, 40);
+   m_ipGridNextLotMultiplier.StartDraw(
+      m_x + 2 * ((m_width - 40) / 3) + 30,
+      m_y + yOffsetPanel,
+      (m_width - 40) / 3,
+      fontSize
+   );
 
    yOffsetPanel += 50;
    // Create input entry price
@@ -681,36 +740,40 @@ void TDTabGrid::StartDraw(int x, int y, int width, int height) {
    m_ipnGridEntryPrice.SetValue(0);
    m_ipnGridEntryPrice.SetMinValue(0);
    m_ipnGridEntryPrice.SetDisabled(!m_enableCustomPrice);
-   m_ipnGridEntryPrice.StartDraw(m_x + 10, m_y + yOffsetPanel, (m_width - 40) / 3, 40);
+   m_ipnGridEntryPrice.StartDraw(m_x + 10, m_y + yOffsetPanel, (m_width - 40) / 3, fontSize);
 
    m_ipcCustomEntryPrice.SetValue(m_enableCustomPrice);
-   m_ipcCustomEntryPrice.SetLabel("Custom", clrWhite);
+   m_ipcCustomEntryPrice.SetLabel("Custom");
    m_ipcCustomEntryPrice.SetZOrderBase(101);
-   m_ipcCustomEntryPrice.StartDraw(m_x + 10 + 90, m_y + yOffsetPanel, 10);
+   m_ipcCustomEntryPrice.StartDraw(m_x + 10 + 90, m_y + yOffsetPanel, fontSize);
 
    // Create input stop loss points
-   m_ipGridStopLossPoints.SetLabel("StopLoss Points:", clrWhite);
+   m_ipGridStopLossPoints.SetLabel("SL Points:", clrWhite);
    m_ipGridStopLossPoints.SetStep(100);
    m_ipGridStopLossPoints.SetDigits(0);
    m_ipGridStopLossPoints.SetValue(10);
    m_ipGridStopLossPoints.SetMinValue(0);
    m_ipGridStopLossPoints
-      .StartDraw(m_x + ((m_width - 40) / 3) + 20, m_y + yOffsetPanel, (m_width - 40) / 3, 40);
+      .StartDraw(m_x + ((m_width - 40) / 3) + 20, m_y + yOffsetPanel, (m_width - 40) / 3, fontSize);
 
    // Create input take profit points
-   m_ipGridTakeProfitPoints.SetLabel("TakeProfit Points:", clrWhite);
+   m_ipGridTakeProfitPoints.SetLabel("TP Points:", clrWhite);
    m_ipGridTakeProfitPoints.SetStep(100);
    m_ipGridTakeProfitPoints.SetDigits(0);
    m_ipGridTakeProfitPoints.SetValue(10);
    m_ipGridTakeProfitPoints.SetMinValue(0);
-   m_ipGridTakeProfitPoints
-      .StartDraw(m_x + 2 * ((m_width - 40) / 3) + 30, m_y + yOffsetPanel, (m_width - 40) / 3, 40);
+   m_ipGridTakeProfitPoints.StartDraw(
+      m_x + 2 * ((m_width - 40) / 3) + 30,
+      m_y + yOffsetPanel,
+      (m_width - 40) / 3,
+      fontSize
+   );
 
    yOffsetPanel += 50;
 
-   m_ipsVolumeType.SetLabel("Volume Risk:", clrWhite);
-   m_ipsVolumeType.SetZOrderBase(101);
-   m_ipsVolumeType.StartDraw(m_x + 10, m_y + yOffsetPanel, (m_width - 40) / 3, 10);
+   m_ipsVolumeRiskType.SetLabel("Volume Risk:", clrWhite);
+   m_ipsVolumeRiskType.SetZOrderBase(101);
+   m_ipsVolumeRiskType.StartDraw(m_x + 10, m_y + yOffsetPanel, (m_width - 40) / 3, fontSize);
 
    m_ipnBaseLot.SetLabel("Base Lot:", clrWhite);
    m_ipnBaseLot.SetStep(0.01);
@@ -718,61 +781,58 @@ void TDTabGrid::StartDraw(int x, int y, int width, int height) {
    m_ipnBaseLot.SetValue(0.01);
    m_ipnBaseLot.SetMinValue(0.01);
    m_ipnBaseLot
-      .StartDraw(m_x + ((m_width - 40) / 3) + 20, m_y + yOffsetPanel, (m_width - 40) / 3, 40);
+      .StartDraw(m_x + ((m_width - 40) / 3) + 20, m_y + yOffsetPanel, (m_width - 40) / 3, fontSize);
 
-   // dùng font family Wingdings để có ký tự tổng
-   uiCommon.CreateLabel(
-      g_chartId,
-      m_objLabelTotalVolumeExpected,
-      "(∑: 0)",
-      m_x + ((m_width - 40) / 3) + 20 + 90,
+   m_ipnVolumeRiskValue.SetLabel("Risk Money ($): ", clrWhite);
+   m_ipnVolumeRiskValue.SetStep(1);
+   m_ipnVolumeRiskValue.SetDigits(0);
+   m_ipnVolumeRiskValue.SetValue(0);
+   m_ipnVolumeRiskValue.SetMinValue(0);
+   m_ipnVolumeRiskValue.SetDisabled(true);
+   m_ipnVolumeRiskValue.StartDraw(
+      m_x + 2 * ((m_width - 40) / 3) + 30,
       m_y + yOffsetPanel,
-      10,
-      clrWhite
+      (m_width - 40) / 3,
+      fontSize
    );
-   uiCommon.setZOrder(g_chartId, m_objLabelTotalVolumeExpected, 100);
-
-   m_ipnVolumeValue.SetLabel(" ", clrWhite);
-   m_ipnVolumeValue.SetStep(1);
-   m_ipnVolumeValue.SetDigits(0);
-   m_ipnVolumeValue.SetValue(0);
-   m_ipnVolumeValue.SetMinValue(0);
-   m_ipnVolumeValue
-      .StartDraw(m_x + 2 * ((m_width - 40) / 3) + 30, m_y + yOffsetPanel, (m_width - 40) / 3, 40);
 
    yOffsetPanel += 55;
 
    m_ipcTrailingStopEnable.SetValue(m_enableTrailingStop);
-   m_ipcTrailingStopEnable.SetLabel("Enable Trailing Stop", clrWhite);
+   m_ipcTrailingStopEnable.SetLabel("Enable Trailing Stop");
    m_ipcTrailingStopEnable.SetZOrderBase(101);
-   m_ipcTrailingStopEnable.StartDraw(m_x + 10, m_y + yOffsetPanel, 10);
+   m_ipcTrailingStopEnable.StartDraw(m_x + 10, m_y + yOffsetPanel, fontSize);
 
    yOffsetPanel = yOffsetPanel + 20;
    m_ipnTrailingStopStart.SetLabel("TS Start (points):", clrWhite);
-   m_ipnTrailingStopStart.SetStep(10);
+   m_ipnTrailingStopStart.SetStep(100);
    m_ipnTrailingStopStart.SetDigits(0);
-   m_ipnTrailingStopStart.SetValue(200);
+   m_ipnTrailingStopStart.SetValue(500);
    m_ipnTrailingStopStart.SetMinValue(0);
    m_ipnTrailingStopStart.SetDisabled(!m_enableTrailingStop);
-   m_ipnTrailingStopStart.StartDraw(m_x + 10, m_y + yOffsetPanel, (m_width - 40) / 3, 40);
+   m_ipnTrailingStopStart.StartDraw(m_x + 10, m_y + yOffsetPanel, (m_width - 40) / 3, fontSize);
 
    m_ipnTrailingStopStep.SetLabel("TS Step (points):", clrWhite);
    m_ipnTrailingStopStep.SetStep(1);
    m_ipnTrailingStopStep.SetDigits(0);
-   m_ipnTrailingStopStep.SetValue(5);
+   m_ipnTrailingStopStep.SetValue(10);
    m_ipnTrailingStopStep.SetMinValue(0);
    m_ipnTrailingStopStep.SetDisabled(!m_enableTrailingStop);
    m_ipnTrailingStopStep
-      .StartDraw(m_x + ((m_width - 40) / 3) + 20, m_y + yOffsetPanel, (m_width - 40) / 3, 40);
+      .StartDraw(m_x + ((m_width - 40) / 3) + 20, m_y + yOffsetPanel, (m_width - 40) / 3, fontSize);
 
    m_ipnTrailingStopDistance.SetLabel("TS Distance (points):", clrWhite);
-   m_ipnTrailingStopDistance.SetStep(10);
+   m_ipnTrailingStopDistance.SetStep(100);
    m_ipnTrailingStopDistance.SetDigits(0);
-   m_ipnTrailingStopDistance.SetValue(50);
+   m_ipnTrailingStopDistance.SetValue(200);
    m_ipnTrailingStopDistance.SetMinValue(0);
    m_ipnTrailingStopDistance.SetDisabled(!m_enableTrailingStop);
-   m_ipnTrailingStopDistance
-      .StartDraw(m_x + 2 * ((m_width - 40) / 3) + 30, m_y + yOffsetPanel, (m_width - 40) / 3, 40);
+   m_ipnTrailingStopDistance.StartDraw(
+      m_x + 2 * ((m_width - 40) / 3) + 30,
+      m_y + yOffsetPanel,
+      (m_width - 40) / 3,
+      fontSize
+   );
 
    yOffsetPanel += 55;
 
@@ -794,9 +854,23 @@ void TDTabGrid::StartDraw(int x, int y, int width, int height) {
    uiCommon.CreateHorizontalLine(g_chartId, m_lineAverageOpenPriceName, 0);
    uiCommon.setLineStyle(g_chartId, m_lineAverageOpenPriceName, STYLE_DOT);
    uiCommon.setLineWidth(g_chartId, m_lineAverageOpenPriceName, 2);
-   uiCommon.setLineColor(g_chartId, m_lineAverageOpenPriceName, clrPurple);
+   uiCommon.setLineColor(g_chartId, m_lineAverageOpenPriceName, clrOrange);
    uiCommon.setZOrder(g_chartId, m_lineAverageOpenPriceName, 50);
    uiCommon.setShow(g_chartId, m_lineAverageOpenPriceName, false);
+
+   uiCommon.CreateHorizontalLine(g_chartId, m_lineTSPeakPriceName, 0);
+   uiCommon.setLineStyle(g_chartId, m_lineTSPeakPriceName, STYLE_DOT);
+   uiCommon.setLineWidth(g_chartId, m_lineTSPeakPriceName, 1);
+   uiCommon.setLineColor(g_chartId, m_lineTSPeakPriceName, clrPurple);
+   uiCommon.setZOrder(g_chartId, m_lineTSPeakPriceName, 50);
+   uiCommon.setShow(g_chartId, m_lineTSPeakPriceName, false);
+
+   uiCommon.CreateHorizontalLine(g_chartId, m_lineTSStopLossPriceName, 0);
+   uiCommon.setLineStyle(g_chartId, m_lineTSStopLossPriceName, STYLE_DOT);
+   uiCommon.setLineWidth(g_chartId, m_lineTSStopLossPriceName, 2);
+   uiCommon.setLineColor(g_chartId, m_lineTSStopLossPriceName, clrViolet);
+   uiCommon.setZOrder(g_chartId, m_lineTSStopLossPriceName, 50);
+   uiCommon.setShow(g_chartId, m_lineTSStopLossPriceName, false);
 }
 
 void TDTabGrid::DestroyDraw() {
@@ -810,14 +884,14 @@ void TDTabGrid::DestroyDraw() {
 void TDTabGrid::RefreshData() {
    // Update entry price
    if(!m_enableCustomPrice) {
-      double openPrice = 0;
+      double priceOpen = 0;
       if(m_gridType == GRID_TYPE_BUY) {
-         openPrice = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+         priceOpen = SymbolInfoDouble(_Symbol, SYMBOL_BID);
 
       } else if(m_gridType == GRID_TYPE_SELL) {
-         openPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+         priceOpen = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
       }
-      m_ipnGridEntryPrice.UpdateValue(openPrice);
+      m_ipnGridEntryPrice.UpdateValue(priceOpen);
    }
 
    // Vẫn còn đang sót trường hợp mới mở được 1 lệnh đã TP luôn, thì các lệnh còn lại vẫn ở trạng
@@ -829,7 +903,7 @@ void TDTabGrid::RefreshData() {
          for(int j = 0; j < m_tableColumns - 1; j++) {
             m_table.SetCell(i, j, "-", CELL_TYPE_TEXT);
          }
-         uiCommon.setShow(0, m_table.GetObjectName(OBJ_CELL_CONTENT, i, 7), false);
+         uiCommon.setShow(g_chartId, m_table.GetObjectName(OBJ_CELL_CONTENT, i, 7), false);
       }
       return;
    }
@@ -859,7 +933,7 @@ void TDTabGrid::RefreshData() {
       m_gridIndex != -1 ? gridItemCount : 0,
       m_gridIndex != -1 ? m_tablePage : 1
    );
- 
+
    for(int i = 0; i < m_tableRows; i++) {
       int gridItemIndex = i + (m_tablePage - 1) * m_tableRows;
 
@@ -868,7 +942,7 @@ void TDTabGrid::RefreshData() {
          for(int j = 0; j < m_tableColumns; j++) {
             m_table.SetCell(i, j, "-", CELL_TYPE_TEXT);
          }
-         uiCommon.setShow(0, m_table.GetObjectName(OBJ_CELL_CONTENT, i, 7), false);
+         uiCommon.setShow(g_chartId, m_table.GetObjectName(OBJ_CELL_CONTENT, i, 7), false);
          continue;
       }
 
@@ -899,7 +973,7 @@ void TDTabGrid::RefreshData() {
             m_table.SetCell(i, j, rowsData[j], CELL_TYPE_TEXT);
          }
          m_table.SetCell(i, 7, "Close", CELL_TYPE_BUTTON);
-         uiCommon.setShow(0, m_table.GetObjectName(OBJ_CELL_CONTENT, i, 7), true);
+         uiCommon.setShow(g_chartId, m_table.GetObjectName(OBJ_CELL_CONTENT, i, 7), true);
          m_table.SetRowData(
             i,
             "TicketType=TicketOrder;TicketId=" + IntegerToString(ticketOrder) + ";"
@@ -929,7 +1003,7 @@ void TDTabGrid::RefreshData() {
                m_table.SetCell(i, j, rowsData[j], CELL_TYPE_TEXT);
             }
             m_table.SetCell(i, 7, "Close", CELL_TYPE_BUTTON);
-            uiCommon.setShow(0, m_table.GetObjectName(OBJ_CELL_CONTENT, i, 7), true);
+            uiCommon.setShow(g_chartId, m_table.GetObjectName(OBJ_CELL_CONTENT, i, 7), true);
             m_table.SetRowData(
                i,
                "TicketType=TicketPosition;TicketId=" + IntegerToString(ticketPosition) + ";"
@@ -962,7 +1036,7 @@ void TDTabGrid::RefreshData() {
               );
          rowsData[2] = DoubleToString(g_gridList[m_gridIndex].ticketDealList[closeIndex].volume, 2);
          rowsData[3]
-            = DoubleToString(g_gridList[m_gridIndex].ticketDealList[closeIndex].openPrice, _Digits);
+            = DoubleToString(g_gridList[m_gridIndex].ticketDealList[closeIndex].priceOpen, _Digits);
          rowsData[4] = DoubleToString(
             g_gridList[m_gridIndex].ticketDealList[closeIndex].closePrice,
             _Digits
@@ -972,7 +1046,7 @@ void TDTabGrid::RefreshData() {
          for(int j = 0; j < 7; j++) {
             m_table.SetCell(i, j, rowsData[j], CELL_TYPE_TEXT);
          }
-         uiCommon.setShow(0, m_table.GetObjectName(OBJ_CELL_CONTENT, i, 7), false);
+         uiCommon.setShow(g_chartId, m_table.GetObjectName(OBJ_CELL_CONTENT, i, 7), false);
          m_table.SetRowData(i, "");
          // Set profit color
          color profitColor;
@@ -1010,18 +1084,30 @@ void TDTabGrid::RefreshData() {
    uiCommon.setText(g_chartId, m_labelTotalProfit, totalProfitText);
    uiCommon.setTextColor(g_chartId, m_labelTotalProfit, profitColor);
 
-   // Vẽ 1 đường line trên chart, đường line màu tím nếu là grid Buy, màu cam nếu là grid Sell
    double averageOpenPrice = g_gridList[m_gridIndex].averageOpenPrice;
+   double tsPeakPrice      = g_gridList[m_gridIndex].tsPeakPrice;
+   double stopLossPrice    = g_gridList[m_gridIndex].stopLossPrice;
    if(averageOpenPrice != 0) {
-      uiCommon.setShow(g_chartId, m_lineAverageOpenPriceName, true);
       uiCommon.setLinePrice(g_chartId, m_lineAverageOpenPriceName, averageOpenPrice);
-      if(g_gridList[m_gridIndex].gridType == GRID_TYPE_BUY) {
-         uiCommon.setLineColor(g_chartId, m_lineAverageOpenPriceName, clrPurple);
+      uiCommon.setLinePrice(g_chartId, m_lineTSPeakPriceName, tsPeakPrice);
+      uiCommon.setLinePrice(g_chartId, m_lineTSStopLossPriceName, stopLossPrice);
+
+      uiCommon.setLineColor(g_chartId, m_lineAverageOpenPriceName, clrOrange);
+      if(g_gridList[m_gridIndex].tsStarted) {
+         uiCommon.setLineColor(g_chartId, m_lineTSPeakPriceName, clrPurple);
+         uiCommon.setLineColor(g_chartId, m_lineTSStopLossPriceName, clrViolet);
       } else {
-         uiCommon.setLineColor(g_chartId, m_lineAverageOpenPriceName, clrOrange);
+         uiCommon.setLineColor(g_chartId, m_lineTSPeakPriceName, clrBrown);
+         uiCommon.setLineColor(g_chartId, m_lineTSStopLossPriceName, clrSaddleBrown);
       }
+
+      uiCommon.setShow(g_chartId, m_lineAverageOpenPriceName, true);
+      uiCommon.setShow(g_chartId, m_lineTSPeakPriceName, true);
+      uiCommon.setShow(g_chartId, m_lineTSStopLossPriceName, true);
    } else {
       uiCommon.setShow(g_chartId, m_lineAverageOpenPriceName, false);
+      uiCommon.setShow(g_chartId, m_lineTSPeakPriceName, false);
+      uiCommon.setShow(g_chartId, m_lineTSStopLossPriceName, false);
    }
 }
 
@@ -1199,12 +1285,12 @@ void TDTabGrid::ClickBtnStartGrid() {
       g_gridList[gridIndex].tsDistancePoints   = (int)m_ipnTrailingStopDistance.GetValue();
    }
 
-   double openPrice = entryPrice;
+   double priceOpen = entryPrice;
    for(int i = 0; i < positionSize; i++) {
       if(m_gridType == GRID_TYPE_BUY) {
          bool result = cTrade.BuyLimit(
             lotSize,
-            openPrice,
+            priceOpen,
             _Symbol,
             stopLossPrice,
             takeProfitPrice,
@@ -1214,13 +1300,13 @@ void TDTabGrid::ClickBtnStartGrid() {
          );
          if(result) {
             lotSize   = MathFloor(lotSize * lotMultiplier / lotStep) * lotStep;
-            openPrice = openPrice - slPointsStep * _Point;
+            priceOpen = priceOpen - slPointsStep * _Point;
          }
       }
       if(m_gridType == GRID_TYPE_SELL) {
          bool result = cTrade.SellLimit(
             lotSize,
-            openPrice,
+            priceOpen,
             _Symbol,
             stopLossPrice,
             takeProfitPrice,
@@ -1230,7 +1316,7 @@ void TDTabGrid::ClickBtnStartGrid() {
          );
          if(result) {
             lotSize   = MathFloor(lotSize * lotMultiplier / lotStep) * lotStep;
-            openPrice = openPrice + slPointsStep * _Point;
+            priceOpen = priceOpen + slPointsStep * _Point;
          }
       }
    }
@@ -1241,27 +1327,27 @@ void TDTabGrid::ClickBtnStartGrid() {
    RefreshData();
 }
 
-void TDTabGrid::OnChartEvent(
+void TDTabGrid::OnRealtimeEvent(
    const int id, const long &lparam, const double &dparam, const string &sparam
 ) {
-   m_popupEdit.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipSelectGrid.OnChartEvent(id, lparam, dparam, sparam);
-   m_table.OnChartEvent(id, lparam, dparam, sparam);
-   m_irGridTypeGroup.OnChartEvent(id, lparam, dparam, sparam);
-   m_iptGridName.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipGridPositionSize.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipGridNextLotMultiplier.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipnGridEntryPrice.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipcCustomEntryPrice.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipGridStopLossPoints.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipGridTakeProfitPoints.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipsVolumeType.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipnBaseLot.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipnVolumeValue.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipcTrailingStopEnable.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipnTrailingStopStart.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipnTrailingStopStep.OnChartEvent(id, lparam, dparam, sparam);
-   m_ipnTrailingStopDistance.OnChartEvent(id, lparam, dparam, sparam);
+   m_popupEdit.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipSelectGrid.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_table.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_irGridTypeGroup.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_iptGridName.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipGridPositionSize.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipGridNextLotMultiplier.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipnGridEntryPrice.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipcCustomEntryPrice.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipGridStopLossPoints.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipGridTakeProfitPoints.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipsVolumeRiskType.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipnBaseLot.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipnVolumeRiskValue.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipcTrailingStopEnable.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipnTrailingStopStart.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipnTrailingStopStep.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_ipnTrailingStopDistance.OnRealtimeEvent(id, lparam, dparam, sparam);
 
    if(id == CHARTEVENT_OBJECT_CLICK) {
       if(sparam == m_ObjBtnStartGridName) {
@@ -1291,25 +1377,25 @@ void TDTabGrid::OnChartEvent(
    }
 }
 
-void TDTabGrid::OnMQLTesterEvent() {
-   m_popupEdit.OnMQLTesterEvent();
-   m_ipSelectGrid.OnMQLTesterEvent();
-   m_table.OnMQLTesterEvent();
-   m_irGridTypeGroup.OnMQLTesterEvent();
-   m_iptGridName.OnMQLTesterEvent();
-   m_ipGridPositionSize.OnMQLTesterEvent();
-   m_ipGridNextLotMultiplier.OnMQLTesterEvent();
-   m_ipnGridEntryPrice.OnMQLTesterEvent();
-   m_ipcCustomEntryPrice.OnMQLTesterEvent();
-   m_ipGridStopLossPoints.OnMQLTesterEvent();
-   m_ipGridTakeProfitPoints.OnMQLTesterEvent();
-   m_ipsVolumeType.OnMQLTesterEvent();
-   m_ipnBaseLot.OnMQLTesterEvent();
-   m_ipnVolumeValue.OnMQLTesterEvent();
-   m_ipcTrailingStopEnable.OnMQLTesterEvent();
-   m_ipnTrailingStopStart.OnMQLTesterEvent();
-   m_ipnTrailingStopStep.OnMQLTesterEvent();
-   m_ipnTrailingStopDistance.OnMQLTesterEvent();
+void TDTabGrid::OnStrategyTesterEvent() {
+   m_popupEdit.OnStrategyTesterEvent();
+   m_ipSelectGrid.OnStrategyTesterEvent();
+   m_table.OnStrategyTesterEvent();
+   m_irGridTypeGroup.OnStrategyTesterEvent();
+   m_iptGridName.OnStrategyTesterEvent();
+   m_ipGridPositionSize.OnStrategyTesterEvent();
+   m_ipGridNextLotMultiplier.OnStrategyTesterEvent();
+   m_ipnGridEntryPrice.OnStrategyTesterEvent();
+   m_ipcCustomEntryPrice.OnStrategyTesterEvent();
+   m_ipGridStopLossPoints.OnStrategyTesterEvent();
+   m_ipGridTakeProfitPoints.OnStrategyTesterEvent();
+   m_ipsVolumeRiskType.OnStrategyTesterEvent();
+   m_ipnBaseLot.OnStrategyTesterEvent();
+   m_ipnVolumeRiskValue.OnStrategyTesterEvent();
+   m_ipcTrailingStopEnable.OnStrategyTesterEvent();
+   m_ipnTrailingStopStart.OnStrategyTesterEvent();
+   m_ipnTrailingStopStep.OnStrategyTesterEvent();
+   m_ipnTrailingStopDistance.OnStrategyTesterEvent();
 
    if(uiCommon.getState(g_chartId, m_ObjBtnStartGridName)) {
       ClickBtnStartGrid();
@@ -1328,7 +1414,7 @@ void TDTabGrid::OnMQLTesterEvent() {
       bool isBtnClosePressed
          = uiCommon.getState(g_chartId, m_table.GetObjectName(OBJ_CELL_CONTENT, i, 7));
       if(isBtnClosePressed) {
-         uiCommon.setState(0, m_table.GetObjectName(OBJ_CELL_CONTENT, i, 7), false);
+         uiCommon.setState(g_chartId, m_table.GetObjectName(OBJ_CELL_CONTENT, i, 7), false);
          string rowData    = m_table.GetRowData(i);
          string ticketType = UtilString::GetValueFromEncodedString(rowData, "TicketType");
          string ticketId   = UtilString::GetValueFromEncodedString(rowData, "TicketId");

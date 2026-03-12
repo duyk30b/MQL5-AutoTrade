@@ -56,17 +56,11 @@ struct TableHeader {
    ENUM_CELL_TYPE cellType;
 };
 
-class UITableListener {
- public:
-   virtual void onChangePage(int newPage) = 0;
-   // virtual void onCellButtonClick(int row, int col) = 0;
-};
-
 class UITable {
  private:
-   UITableListener *m_listener;
-   FOnChange        m_callback;
-   void            *m_context; // lưu pointer đến object chủ
+   UIListener *m_listener;
+   FOnChange   m_callback;
+   void       *m_parent; // lưu pointer đến object chủ
 
    // Basic properties
    long   m_chartId; // Chart ID
@@ -124,10 +118,10 @@ class UITable {
    UITable() {};
    ~UITable() { TableDestroy(); };
 
-   void SetListener(UITableListener *listener) { m_listener = listener; };
+   void SetListener(UIListener *listener) { m_listener = listener; };
    void SetCallback(void *ctx, FOnChange cb) {
       m_callback = cb;
-      m_context  = ctx;
+      m_parent   = ctx;
    }
 
    // Khởi tạo panel
@@ -380,8 +374,8 @@ class UITable {
       string objPaginationTotalName = GetObjectName(OBJ_PAGINATION_TOTAL);
       string objPaginationPageName  = GetObjectName(OBJ_PAGINATION_PAGE);
 
-      ObjectSetString(0, objPaginationTotalName, OBJPROP_TEXT, totalText);
-      ObjectSetString(0, objPaginationPageName, OBJPROP_TEXT, pageText);
+      ObjectSetString(m_chartId, objPaginationTotalName, OBJPROP_TEXT, totalText);
+      ObjectSetString(m_chartId, objPaginationPageName, OBJPROP_TEXT, pageText);
    };
    string GetRowData(int row) { return m_tableRows[row].data; };
    void   SetRowData(int row, string data) { m_tableRows[row].data = data; };
@@ -406,12 +400,12 @@ class UITable {
       }
    };
 
-   void OnChangePage(int page) {
+   void EmitChangePage(int page) {
       if(m_listener != NULL) {
-         m_listener.onChangePage(page);
+         m_listener.listen(&this, UI_EVENT_CHANGE_PAGE, page);
       }
       if(m_callback != NULL) {
-         m_callback(m_context, UI_EVENT_CHANGE_PAGE, page);
+         m_callback(m_parent, UI_EVENT_CHANGE_PAGE, page);
       }
    }
 
@@ -419,8 +413,10 @@ class UITable {
    void StartDraw(int x, int y);
    void HandleClickBtnPaginationPrevious();
    void HandleClickBtnPaginationNext();
-   void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
-   void OnMQLTesterEvent();
+   void OnRealtimeEvent(
+      const int id, const long &lparam, const double &dparam, const string &sparam
+   );
+   void OnStrategyTesterEvent();
 };
 
 void UITable::StartDraw(int x, int y) {
@@ -440,7 +436,11 @@ void UITable::CreateHeaders() {
    int colsCount = ArraySize(m_tableHeader);
    for(int col = 0; col < colsCount; col++) {
       string objHeaderBgName = GetObjectName(OBJ_HEADER_BG, 0, col);
-      ObjectCreate(m_chartId, objHeaderBgName, OBJ_RECTANGLE_LABEL, 0, 0, 0);
+      if(!ObjectCreate(m_chartId, objHeaderBgName, OBJ_RECTANGLE_LABEL, 0, 0, 0)) {
+         Print("Failed to create header background: ", objHeaderBgName, " Error: ", GetLastError());
+         return;
+      }
+
       ObjectSetInteger(m_chartId, objHeaderBgName, OBJPROP_XDISTANCE, xOffset);
       ObjectSetInteger(m_chartId, objHeaderBgName, OBJPROP_YDISTANCE, m_y);
       ObjectSetInteger(m_chartId, objHeaderBgName, OBJPROP_XSIZE, m_tableHeader[col].width);
@@ -454,7 +454,10 @@ void UITable::CreateHeaders() {
       ObjectSetInteger(m_chartId, objHeaderBgName, OBJPROP_ZORDER, m_zOrderBase + 0);
 
       string objHeaderTextName = GetObjectName(OBJ_HEADER_TEXT, 0, col);
-      ObjectCreate(m_chartId, objHeaderTextName, OBJ_LABEL, 0, 0, 0);
+      if(!ObjectCreate(m_chartId, objHeaderTextName, OBJ_LABEL, 0, 0, 0)) {
+         Print("Failed to create header text: ", objHeaderTextName, " Error: ", GetLastError());
+         return;
+      }
       ObjectSetInteger(m_chartId, objHeaderTextName, OBJPROP_XDISTANCE, xOffset + 5);
       ObjectSetInteger(m_chartId, objHeaderTextName, OBJPROP_YDISTANCE, m_y + 8);
       ObjectSetString(m_chartId, objHeaderTextName, OBJPROP_TEXT, m_tableHeader[col].headerText);
@@ -484,7 +487,10 @@ void UITable::CreateCells() {
       for(int col = 0; col < colsCount; col++) {
          // Cell background
          string objCellBgName = GetObjectName(OBJ_CELL_BG, row, col);
-         ObjectCreate(m_chartId, objCellBgName, OBJ_RECTANGLE_LABEL, 0, 0, 0);
+         if(!ObjectCreate(m_chartId, objCellBgName, OBJ_RECTANGLE_LABEL, 0, 0, 0)) {
+            Print("Failed to create cell background: ", objCellBgName, " Error: ", GetLastError());
+            return;
+         }
          ObjectSetInteger(m_chartId, objCellBgName, OBJPROP_XDISTANCE, xOffset);
          ObjectSetInteger(m_chartId, objCellBgName, OBJPROP_YDISTANCE, yPos);
          ObjectSetInteger(m_chartId, objCellBgName, OBJPROP_XSIZE, m_tableHeader[col].width);
@@ -500,7 +506,15 @@ void UITable::CreateCells() {
          if(m_tableHeader[col].cellType == CELL_TYPE_TEXT) {
             string objCellContentName = GetObjectName(OBJ_CELL_CONTENT, row, col);
             string text               = m_tableRows[row].cells[col].text;
-            ObjectCreate(m_chartId, objCellContentName, OBJ_LABEL, 0, 0, 0);
+            if(!ObjectCreate(m_chartId, objCellContentName, OBJ_LABEL, 0, 0, 0)) {
+               Print(
+                  "Failed to create cell content: ",
+                  objCellContentName,
+                  " Error: ",
+                  GetLastError()
+               );
+               return;
+            }
             ObjectSetInteger(m_chartId, objCellContentName, OBJPROP_XDISTANCE, xOffset + 5);
             ObjectSetInteger(m_chartId, objCellContentName, OBJPROP_YDISTANCE, yPos + 6);
             ObjectSetString(m_chartId, objCellContentName, OBJPROP_TEXT, text);
@@ -515,7 +529,15 @@ void UITable::CreateCells() {
          if(m_tableHeader[col].cellType == CELL_TYPE_BUTTON) {
             string objCellContentName = GetObjectName(OBJ_CELL_CONTENT, row, col);
             string text               = m_tableRows[row].cells[col].text;
-            ObjectCreate(m_chartId, objCellContentName, OBJ_BUTTON, 0, 0, 0);
+            if(!ObjectCreate(m_chartId, objCellContentName, OBJ_BUTTON, 0, 0, 0)) {
+               Print(
+                  "Failed to create cell button: ",
+                  objCellContentName,
+                  " Error: ",
+                  GetLastError()
+               );
+               return;
+            }
             ObjectSetInteger(m_chartId, objCellContentName, OBJPROP_CORNER, CORNER_LEFT_UPPER);
             ObjectSetInteger(m_chartId, objCellContentName, OBJPROP_XDISTANCE, xOffset + 5);
             ObjectSetInteger(m_chartId, objCellContentName, OBJPROP_YDISTANCE, yPos + 4);
@@ -556,7 +578,15 @@ void UITable::CreatePagination() {
    // Create Total Label
    string objPaginationTotalName = GetObjectName(OBJ_PAGINATION_TOTAL);
    string paginationText         = "Total: " + IntegerToString(m_total);
-   ObjectCreate(m_chartId, objPaginationTotalName, OBJ_LABEL, 0, 0, 0);
+   if(!ObjectCreate(m_chartId, objPaginationTotalName, OBJ_LABEL, 0, 0, 0)) {
+      Print(
+         "Failed to create pagination total label: ",
+         objPaginationTotalName,
+         " Error: ",
+         GetLastError()
+      );
+      return;
+   }
    ObjectSetInteger(m_chartId, objPaginationTotalName, OBJPROP_XDISTANCE, m_x + 10);
    ObjectSetInteger(
       m_chartId,
@@ -577,7 +607,15 @@ void UITable::CreatePagination() {
 
    // Create Previous Page Button
    string objPaginationPreviousPageName = GetObjectName(OBJ_PAGINATION_PREVIOUS_PAGE);
-   ObjectCreate(m_chartId, objPaginationPreviousPageName, OBJ_BUTTON, 0, 0, 0);
+   if(!ObjectCreate(m_chartId, objPaginationPreviousPageName, OBJ_BUTTON, 0, 0, 0)) {
+      Print(
+         "Failed to create pagination previous page button: ",
+         objPaginationPreviousPageName,
+         " Error: ",
+         GetLastError()
+      );
+      return;
+   }
    ObjectSetInteger(
       m_chartId,
       objPaginationPreviousPageName,
@@ -619,7 +657,15 @@ void UITable::CreatePagination() {
    string objPaginationPageName = GetObjectName(OBJ_PAGINATION_PAGE);
    string pageText              = IntegerToString(m_page) + " / " + IntegerToString(m_pageTotal);
 
-   ObjectCreate(m_chartId, objPaginationPageName, OBJ_LABEL, 0, 0, 0);
+   if(!ObjectCreate(m_chartId, objPaginationPageName, OBJ_LABEL, 0, 0, 0)) {
+      Print(
+         "Failed to create pagination page label: ",
+         objPaginationPageName,
+         " Error: ",
+         GetLastError()
+      );
+      return;
+   }
    ObjectSetInteger(
       m_chartId,
       objPaginationPageName,
@@ -645,7 +691,15 @@ void UITable::CreatePagination() {
 
    // Create Next Page Button
    string objPaginationNextPageName = GetObjectName(OBJ_PAGINATION_NEXT_PAGE);
-   ObjectCreate(m_chartId, objPaginationNextPageName, OBJ_BUTTON, 0, 0, 0);
+   if(!ObjectCreate(m_chartId, objPaginationNextPageName, OBJ_BUTTON, 0, 0, 0)) {
+      Print(
+         "Failed to create pagination next page button: ",
+         objPaginationNextPageName,
+         " Error: ",
+         GetLastError()
+      );
+      return;
+   }
    ObjectSetInteger(
       m_chartId,
       objPaginationNextPageName,
@@ -731,19 +785,19 @@ void UITable::TableDestroy() {
 }
 
 void UITable::HandleClickBtnPaginationPrevious() {
-   ObjectSetInteger(0, GetObjectName(OBJ_PAGINATION_PREVIOUS_PAGE), OBJPROP_STATE, false);
+   ObjectSetInteger(m_chartId, GetObjectName(OBJ_PAGINATION_PREVIOUS_PAGE), OBJPROP_STATE, false);
    if(m_page > 1) {
-      OnChangePage(m_page - 1);
+      EmitChangePage(m_page - 1);
    }
 };
 void UITable::HandleClickBtnPaginationNext() {
-   ObjectSetInteger(0, GetObjectName(OBJ_PAGINATION_NEXT_PAGE), OBJPROP_STATE, false);
+   ObjectSetInteger(m_chartId, GetObjectName(OBJ_PAGINATION_NEXT_PAGE), OBJPROP_STATE, false);
    if(m_page < m_pageTotal) {
-      OnChangePage(m_page + 1);
+      EmitChangePage(m_page + 1);
    }
 };
 
-void UITable::OnChartEvent(
+void UITable::OnRealtimeEvent(
    const int id, const long &lparam, const double &dparam, const string &sparam
 ) {
    if(id == CHARTEVENT_MOUSE_MOVE) {
@@ -774,7 +828,7 @@ void UITable::OnChartEvent(
    }
 };
 
-void UITable::OnMQLTesterEvent() {
+void UITable::OnStrategyTesterEvent() {
    bool btnPreviousState
       = ObjectGetInteger(m_chartId, GetObjectName(OBJ_PAGINATION_PREVIOUS_PAGE), OBJPROP_STATE);
    if(btnPreviousState) {
