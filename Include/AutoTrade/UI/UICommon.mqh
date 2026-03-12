@@ -18,7 +18,11 @@ class UICommon {
       const long chartId, string name, int x, int y, int width, int height, color borderBoxColor
    ) {
       // Hình chữ nhật có thể set border
-      ObjectCreate(chartId, name, OBJ_RECTANGLE_LABEL, 0, 0, 0);
+      if(!ObjectCreate(chartId, name, OBJ_RECTANGLE_LABEL, 0, 0, 0)) {
+         Print("Failed to create rectangle label: ", name, " Error: ", GetLastError());
+         return;
+      }
+
       ObjectSetInteger(chartId, name, OBJPROP_XDISTANCE, x);
       ObjectSetInteger(chartId, name, OBJPROP_YDISTANCE, y);
       ObjectSetInteger(chartId, name, OBJPROP_XSIZE, width);
@@ -41,14 +45,14 @@ class UICommon {
       const string text,
       int          x,
       int          y,
-      int          fontSize   = 8,
-      color        textColor  = clrBlack,
-      string       fontFamily = "Arial"
+      int          fontSize = 8,
+      color textColor       = clrBlack,
+      string fontFamily     = "Arial"
    ) {
-      if(ObjectFind(chartId, name) >= 0)
-         ObjectDelete(chartId, name);
-      if(!ObjectCreate(chartId, name, OBJ_LABEL, 0, 0, 0))
+      if(!ObjectCreate(chartId, name, OBJ_LABEL, 0, 0, 0)) {
+         Print("Failed to create label: ", name, " Error: ", GetLastError());
          return false;
+      }
 
       ObjectSetInteger(chartId, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
       ObjectSetInteger(chartId, name, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
@@ -74,16 +78,16 @@ class UICommon {
       const string text,
       int          x,
       int          y,
-      int          width           = 100,
-      int          height          = 35,
-      color        textColor       = clrBlack,
-      color        backgroundColor = clrSilver,
-      color        borderColor     = clrSilver
+      int          width    = 100,
+      int height            = 35,
+      color textColor       = clrBlack,
+      color backgroundColor = clrSilver,
+      color borderColor     = clrSilver
    ) {
-      if(ObjectFind(chartId, name) >= 0)
-         ObjectDelete(chartId, name);
-      if(!ObjectCreate(chartId, name, OBJ_BUTTON, 0, 0, 0))
+      if(!ObjectCreate(chartId, name, OBJ_BUTTON, 0, 0, 0)) {
+         Print("Failed to create button: ", name, " Error: ", GetLastError());
          return false;
+      }
 
       ObjectSetInteger(chartId, name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
       ObjectSetInteger(chartId, name, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
@@ -110,7 +114,10 @@ class UICommon {
    }
 
    void CreateEdit(long chartId, string name, int w, int h, string txt, int fontSize = 12) {
-      ObjectCreate(chartId, name, OBJ_EDIT, 0, 0, 0);
+      if(!ObjectCreate(chartId, name, OBJ_EDIT, 0, 0, 0)) {
+         Print("Failed to create edit: ", name, " Error: ", GetLastError());
+         return;
+      }
       ObjectSetInteger(chartId, name, OBJPROP_XSIZE, w);          // Chiều rộng
       ObjectSetInteger(chartId, name, OBJPROP_YSIZE, h);          // Chiều cao
       ObjectSetString(chartId, name, OBJPROP_TEXT, txt);          // Giá trị ban đầu
@@ -171,7 +178,10 @@ class UICommon {
       );
    }
    void CreateHorizontalLine(long chartId, string name, double price) {
-      ObjectCreate(chartId, name, OBJ_HLINE, 0, 0, 0);
+      if(!ObjectCreate(chartId, name, OBJ_HLINE, 0, 0, 0)) {
+         Print("Failed to create horizontal line: ", name, " Error: ", GetLastError());
+         return;
+      }
       ObjectSetDouble(chartId, name, OBJPROP_PRICE, price);
    }
    void setLineColor(long chartId, string name, color lineColor) {

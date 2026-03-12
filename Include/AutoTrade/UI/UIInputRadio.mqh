@@ -13,49 +13,30 @@
 
 #include <AutoTrade/UI/UIDefines.mqh>
 
-class UIInputRadioListener {
- public:
-   virtual void onChangeChecked(double checked) = 0;
-};
-
 class UIInputRadio {
  private:
-   UIInputRadioListener *m_listener;
-   FOnChange             m_callback;
-   void                 *m_context;      // lưu pointer đến object chủ
+   UIListener *m_listener;
+   FOnChange   m_callback;
+   void       *m_parent;       // lưu pointer đến object chủ
 
-   long                  m_chartId;      // ID của chart
-   string                m_name;         // Tên unique cho control
-   int                   m_x;            // Vị trí X
-   int                   m_y;            // Vị trí Y
-   int                   m_fontSize;     // Kích thước font chữ label
-   int                   m_value;        // Giá trị hiện tại
-   bool                  m_checked;      // Trạng thái checked của radio button
-   string                m_label;        // Text label (nếu có)
+   long        m_chartId;      // ID của chart
+   string      m_name;         // Tên unique cho control
+   int         m_x;            // Vị trí X
+   int         m_y;            // Vị trí Y
+   int         m_fontSize;     // Kích thước font chữ label
+   int         m_value;        // Giá trị hiện tại
+   bool        m_checked;      // Trạng thái checked của radio button
+   string      m_label;        // Text label (nếu có)
 
-   color                 m_normalColor;  // Màu normal
-   color                 m_checkedColor; // Màu dấu check
+   color       m_normalColor;  // Màu normal
+   color       m_checkedColor; // Màu dấu check
 
-   string                m_labelName;
-   string                m_btnRadioName;
+   string      m_labelName;
+   string      m_btnRadioName;
 
  public:
    UIInputRadio() {}
-   ~UIInputRadio() { Destroy(); }
-
-   void Destroy() {
-      string objNameList[];
-      int    countObject = GetObjectNameList(objNameList);
-      for(int i = 0; i < countObject; i++) {
-         ObjectDelete(m_chartId, objNameList[i]);
-      }
-   }
-
-   void SetListener(UIInputRadioListener *listener) { m_listener = listener; };
-   void SetCallback(void *ctx, FOnChange cb) {
-      m_callback = cb;
-      m_context  = ctx;
-   }
+   ~UIInputRadio() { DeleteAllObject(); }
 
    void Initialize(long chartId, string name) {
       m_chartId      = chartId;
@@ -71,13 +52,42 @@ class UIInputRadio {
       m_labelName    = "Obj_" + name + "_Label";
       m_btnRadioName = "Obj_" + name + "_Radio";
    }
-   int GetValue() const { return m_value; }
+
+   void SetListener(UIListener *listener) { m_listener = listener; };
+   void SetCallback(void *parent, FOnChange cb) {
+      m_callback = cb;
+      m_parent   = parent;
+   }
+
+   void EmitValue() {
+      if(m_listener != NULL) {
+         m_listener.listen(&this, UI_EVENT_CHANGE_VALUE, m_value);
+      }
+      if(m_callback != NULL) {
+         if(m_checked) {
+            m_callback(m_parent, UI_EVENT_CHANGE_VALUE, m_value);
+         } else {
+            m_callback(m_parent, UI_EVENT_CHANGE_VALUE, -1);
+         }
+      }
+   }
+
    int GetObjectNameList(string &objNameList[]) {
       ArrayResize(objNameList, 2);
       objNameList[0] = m_labelName;
       objNameList[1] = m_btnRadioName;
       return 2;
    }
+
+   void DeleteAllObject() {
+      string objNameList[];
+      int    countObject = GetObjectNameList(objNameList);
+      for(int i = 0; i < countObject; i++) {
+         ObjectDelete(m_chartId, objNameList[i]);
+      }
+   }
+
+   int  GetValue() const { return m_value; }
 
    void SetValue(int value) { m_value = value; };
    void SetChecked(bool checked) { m_checked = checked; };
@@ -98,19 +108,6 @@ class UIInputRadio {
       }
    };
 
-   void OnChangeChecked() {
-      if(m_listener != NULL) {
-         m_listener.onChangeChecked(m_value);
-      }
-      if(m_callback != NULL) {
-         if(m_checked) {
-            m_callback(m_context, UI_EVENT_CHANGE_VALUE, m_value);
-         } else {
-            m_callback(m_context, UI_EVENT_CHANGE_VALUE, -1);
-         }
-      }
-   }
-
    void StartDraw(int x, int y, string label, int fontSize = 10) {
       m_x        = x;
       m_y        = y;
@@ -118,7 +115,11 @@ class UIInputRadio {
       m_fontSize = fontSize;
 
       // Create button
-      ObjectCreate(m_chartId, m_btnRadioName, OBJ_BUTTON, 0, 0, 0);
+      if(!ObjectCreate(m_chartId, m_btnRadioName, OBJ_BUTTON, 0, 0, 0)) {
+         Print("Failed to create button: ", m_btnRadioName, " Error: ", GetLastError());
+         return;
+      }
+
       ObjectSetInteger(m_chartId, m_btnRadioName, OBJPROP_CORNER, CORNER_LEFT_UPPER);
       ObjectSetInteger(m_chartId, m_btnRadioName, OBJPROP_XDISTANCE, m_x);
       ObjectSetInteger(m_chartId, m_btnRadioName, OBJPROP_YDISTANCE, m_y + m_fontSize / 8);
@@ -150,7 +151,10 @@ class UIInputRadio {
       ObjectSetInteger(m_chartId, m_btnRadioName, OBJPROP_ZORDER, 100);
 
       // Create label
-      ObjectCreate(m_chartId, m_labelName, OBJ_LABEL, 0, 0, 0);
+      if(!ObjectCreate(m_chartId, m_labelName, OBJ_LABEL, 0, 0, 0)) {
+         Print("Failed to create label: ", m_labelName, " Error: ", GetLastError());
+         return;
+      }
       ObjectSetInteger(m_chartId, m_labelName, OBJPROP_CORNER, CORNER_LEFT_UPPER);
       ObjectSetInteger(m_chartId, m_labelName, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
       ObjectSetInteger(
@@ -173,16 +177,18 @@ class UIInputRadio {
    void ClickBtnRadio() {
       ObjectSetInteger(m_chartId, m_btnRadioName, OBJPROP_STATE, false);
       UpdateChecked(!m_checked);
-      OnChangeChecked();
+      EmitValue();
    };
-   void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam) {
+   void OnRealtimeEvent(
+      const int id, const long &lparam, const double &dparam, const string &sparam
+   ) {
       if(id == CHARTEVENT_OBJECT_CLICK) {
          if(sparam == m_btnRadioName || sparam == m_labelName) {
             ClickBtnRadio();
          }
       }
    };
-   void OnMQLTesterEvent() {
+   void OnStrategyTesterEvent() {
       bool btnSettingState = ObjectGetInteger(m_chartId, m_btnRadioName, OBJPROP_STATE);
       if(btnSettingState) {
          ClickBtnRadio();
@@ -190,17 +196,33 @@ class UIInputRadio {
    };
 };
 
-class UIInputRadioGroup {
+class UIInputRadioGroup : public UIListener {
  public:
+   UIListener   *m_listener;
    FOnChange     m_callback;
-   void         *m_context;       // lưu pointer đến object chủ
+   void         *m_parent;        // lưu pointer đến object chủ
+
+   string        m_name;          // Tên unique cho control
    UIInputRadio *m_ipRadioList[]; // Danh sách các inputRadio trong nhóm
    int           m_value;
 
-   void          SetCallback(void *ctx, FOnChange cb) {
-      m_callback = cb;
-      m_context  = ctx;
+   void          Initialize(string name) {
+      m_name  = name;
+      m_value = -1; // Giá trị mặc định khi chưa có radio nào được chọn
    }
+
+   void SetListener(UIListener *listener) { m_listener = listener; };
+   void SetCallback(void *parent, FOnChange cb) {
+      m_callback = cb;
+      m_parent   = parent;
+   }
+   virtual void listen(void *child, UI_EVENT_TYPE type, double value) override {
+      m_value = (int)value;
+      // UIInputRadio *childCtx = (UIInputRadio *)child;
+      // m_value                = childCtx.GetValue();
+      EmitValue();
+   }
+
    int  GetValue() const { return m_value; }
    void SetValue(int value) { m_value = value; };
    int  GetObjectNameList(string &objNameList[]) {
@@ -232,36 +254,46 @@ class UIInputRadioGroup {
       ArrayResize(m_ipRadioList, ArraySize(m_ipRadioList) + 1);
       m_ipRadioList[ArraySize(m_ipRadioList) - 1] = inputRadio;
       inputRadio.SetCallback(&this, OnChangeChecked);
+      inputRadio.SetListener(&this);
    }
 
    static void OnChangeChecked(void *context, UI_EVENT_TYPE type, double value) {
-      UIInputRadioGroup *group = (UIInputRadioGroup *)context;
+      UIInputRadioGroup *self = (UIInputRadioGroup *)context;
 
       if(type == UI_EVENT_CHANGE_VALUE) {
-         group.m_value = (int)value;
-         for(int i = 0; i < ArraySize(group.m_ipRadioList); i++) {
-            if(group.m_ipRadioList[i].GetValue() == group.m_value) {
-               group.m_ipRadioList[i].UpdateChecked(true);
+         self.m_value = (int)value;
+         for(int i = 0; i < ArraySize(self.m_ipRadioList); i++) {
+            if(self.m_ipRadioList[i].GetValue() == self.m_value) {
+               self.m_ipRadioList[i].UpdateChecked(true);
             } else {
-               group.m_ipRadioList[i].UpdateChecked(false);
+               self.m_ipRadioList[i].UpdateChecked(false);
             }
          }
-         if(group.m_callback != NULL) {
-            group.m_callback(group.m_context, type, value);
-         }
+         self.EmitValue();
       }
    }
 
-   void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam) {
+   void EmitValue() {
+      if(m_listener != NULL) {
+         m_listener.listen(&this, UI_EVENT_CHANGE_VALUE, m_value);
+      }
+      if(m_callback != NULL) {
+         m_callback(m_parent, UI_EVENT_CHANGE_VALUE, m_value);
+      }
+   }
+
+   void OnRealtimeEvent(
+      const int id, const long &lparam, const double &dparam, const string &sparam
+   ) {
       if(id == CHARTEVENT_OBJECT_CLICK) {
          for(int i = 0; i < ArraySize(m_ipRadioList); i++) {
-            m_ipRadioList[i].OnChartEvent(id, lparam, dparam, sparam);
+            m_ipRadioList[i].OnRealtimeEvent(id, lparam, dparam, sparam);
          }
       }
    };
-   void OnMQLTesterEvent() {
+   void OnStrategyTesterEvent() {
       for(int i = 0; i < ArraySize(m_ipRadioList); i++) {
-         m_ipRadioList[i].OnMQLTesterEvent();
+         m_ipRadioList[i].OnStrategyTesterEvent();
       }
    }
 };

@@ -19,9 +19,9 @@ struct UIInputSelectOption {
 
 class UIInputSelect {
  private:
-   UIInputListener    *m_listener;        // Pointer to the input listener
+   UIListener         *m_listener;        // Pointer to the input listener
    FOnChange           m_callback;        // Callback function for value changes
-   void               *m_context;         // Context for the callback function
+   void               *m_parent;          // Context for the callback function
 
    long                m_chartId;         // Chart ID for the input control
    string              m_name;
@@ -49,20 +49,7 @@ class UIInputSelect {
 
  public:
    UIInputSelect() {}
-   ~UIInputSelect() { DestroyDraw(); }
-   void DestroyDraw() {
-      string objNameList[];
-      int    countObject = GetObjectNameList(objNameList);
-      for(int i = 0; i < countObject; i++) {
-         ObjectDelete(m_chartId, objNameList[i]);
-      }
-   }
-
-   void SetListener(UIInputListener *listener) { m_listener = listener; }
-   void SetCallback(void *context, FOnChange callback) {
-      m_context  = context;
-      m_callback = callback;
-   }
+   ~UIInputSelect() { DeleteAllObject(); }
 
    void Initialize(long chartId, string name) {
       m_chartId               = chartId;
@@ -90,6 +77,21 @@ class UIInputSelect {
       // clang-format on
    };
 
+   void SetListener(UIListener *listener) { m_listener = listener; }
+   void SetCallback(void *parent, FOnChange callback) {
+      m_parent   = parent;
+      m_callback = callback;
+   }
+
+   void EmitValue() {
+      if(m_listener != NULL) {
+         m_listener.listen(&this, UI_EVENT_CHANGE_VALUE, m_value);
+      }
+      if(m_callback != NULL) {
+         m_callback(m_parent, UI_EVENT_CHANGE_VALUE, m_value);
+      }
+   }
+
    string GetOptionObjectName(int index) {
       if(index < 0 || index >= ArraySize(m_options)) {
          return "";
@@ -110,6 +112,14 @@ class UIInputSelect {
          objNameList[count++] = GetOptionObjectName(i);
       }
       return count;
+   }
+
+   void DeleteAllObject() {
+      string objNameList[];
+      int    countObject = GetObjectNameList(objNameList);
+      for(int i = 0; i < countObject; i++) {
+         ObjectDelete(m_chartId, objNameList[i]);
+      }
    }
 
    void SetFontSize(int size) { m_fontSize = size; }
@@ -144,15 +154,6 @@ class UIInputSelect {
       return success;
    }
 
-   void OnChangeValue() {
-      if(m_listener != NULL) {
-         m_listener.onChangeValue(m_value);
-      }
-      if(m_callback != NULL) {
-         m_callback(m_context, UI_EVENT_CHANGE_VALUE, m_value);
-      }
-   }
-
    void AddOption(double value, string label) {
       int optionCount = ArraySize(m_options);
       ArrayResize(m_options, optionCount + 1);
@@ -174,8 +175,10 @@ class UIInputSelect {
    void ClickBtnCurrentText();
    void ClickBtnArrow();
    void ClickBtnOption(int index);
-   void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
-   void OnMQLTesterEvent();
+   void OnRealtimeEvent(
+      const int id, const long &lparam, const double &dparam, const string &sparam
+   );
+   void OnStrategyTesterEvent();
 };
 
 void UIInputSelect::StartDraw(int x, int y, int width, int fontSize) {
@@ -216,7 +219,7 @@ void UIInputSelect::StartDraw(int x, int y, int width, int fontSize) {
       ObjectSetInteger(m_chartId, m_objLabelName, OBJPROP_HIDDEN, true);
       ObjectSetInteger(m_chartId, m_objLabelName, OBJPROP_ZORDER, m_zOrderBase + 0);
 
-      yOffset += (int)(m_fontSize * 1.8); // Đặt cách label một khoảng theo chiều dọc
+      yOffset += (int)(m_fontSize * 1.8);
    }
 
    // Create button object for the select input
@@ -333,7 +336,7 @@ void UIInputSelect::StartDraw(int x, int y, int width, int fontSize) {
 }
 
 void UIInputSelect::StartRedraw() {
-   DestroyDraw(); // Xóa các đối tượng cũ trước khi vẽ lại
+   DeleteAllObject(); // Xóa các đối tượng cũ trước khi vẽ lại
    StartDraw(m_x, m_y, m_width, m_fontSize); // Vẽ lại với cùng vị trí và kích thước
 }
 
@@ -395,12 +398,12 @@ void UIInputSelect::ClickBtnOption(int index) {
       }
    }
 
-   HideOptions();   // Ẩn options sau khi chọn
+   HideOptions(); // Ẩn options sau khi chọn
    ChartRedraw(m_chartId);
-   OnChangeValue(); // Gọi sự kiện thay đổi giá trị
+   EmitValue();   // Bắn sự kiện thay đổi giá trị
 }
 
-void UIInputSelect::OnChartEvent(
+void UIInputSelect::OnRealtimeEvent(
    const int id, const long &lparam, const double &dparam, const string &sparam
 ) {
    if(id == CHARTEVENT_OBJECT_CLICK) {
@@ -422,7 +425,7 @@ void UIInputSelect::OnChartEvent(
    }
 }
 
-void UIInputSelect::OnMQLTesterEvent() {
+void UIInputSelect::OnStrategyTesterEvent() {
    if(ObjectGetInteger(m_chartId, m_objBtnCurrentTextName, OBJPROP_STATE)) {
       ClickBtnCurrentText();
    }

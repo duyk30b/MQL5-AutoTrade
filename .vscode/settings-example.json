@@ -3,13 +3,14 @@
     "${workspaceFolder}/**",
     "${workspaceFolder}/Include"
   ],
-  "C_Cpp.default.compilerPath": "",
+  "C_Cpp.default.compilerPath": "/usr/bin/g++-11",
   "C_Cpp.default.intelliSenseMode": "gcc-x64",
   "C_Cpp.errorSquiggles": "disabled",
   "C_Cpp.autocompleteAddParentheses": true,
   "files.exclude": {
     "**/*.ex4": true,
     "**/*.ex5": true,
+    "**/*.log": true,
     "**/*_@!!@.mq4": true,
     "**/*_@!!@.mq5": true,
     "**/*_@!!@.mqh": true,
@@ -111,14 +112,14 @@
       "icon": "symbol-enum"
     },
     {
-      "pattern": "^\\s*(?:void|int|double|bool|string|long|datetime|color|uchar|uint|short|char|float)\\s+(?:[A-Za-z_][A-Za-z0-9_]*::)?([A-Za-z_][A-Za-z0-9_]*)\\s*\\([^;]*\\)\\s*(?!;)",
+      "pattern": "^\\s*(?:(?:static|virtual)\\s+)?(?:void|int|double|bool|string|long|datetime|color|uchar|uint|short|char|float)\\s+(?:[A-Za-z_][A-Za-z0-9_]*::)?([A-Za-z_][A-Za-z0-9_]*)\\s*\\([^;]*\\)\\s*(?!;)",
       "clear": "{",
       "suffix": "",
       "role": "function",
       "icon": "symbol-method"
     },
     {
-      "pattern": "^\\s*(?:void|int|double|bool|string|long|datetime|color|uchar|uint|short|char|float)\\s+(?:[A-Za-z_][A-Za-z0-9_]*::)?([A-Za-z_][A-Za-z0-9_]*)\\s*\\($",
+      "pattern": "^\\s*(?:(?:static|virtual)\\s+)?(?:void|int|double|bool|string|long|datetime|color|uchar|uint|short|char|float)\\s+(?:[A-Za-z_][A-Za-z0-9_]*::)?([A-Za-z_][A-Za-z0-9_]*)\\s*\\($",
       "clear": "(",
       "suffix": "",
       "role": "function",

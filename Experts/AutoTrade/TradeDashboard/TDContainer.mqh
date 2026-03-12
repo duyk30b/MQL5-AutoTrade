@@ -1,5 +1,5 @@
 #include "TDTabGrid.mqh"
-#include "TDTabSetting.mqh"
+#include "TDTabNews.mqh"
 #include "TDTabTrade.mqh"
 #include "TDTablePositions.mqh"
 #include "TradeDashboardContext.mqh"
@@ -8,9 +8,9 @@
 #include <AutoTrade/UI/UIPanel.mqh>
 
 enum TDTabType {
-   TD_TAB_TRADE,   // Tab Trade
-   TD_TAB_SETTING, // Tab Setting
-   TD_TAB_GRID     // Tab Grid
+   TD_TAB_TRADE, // Tab Trade
+   TD_TAB_NEWS,  // Tab News
+   TD_TAB_GRID   // Tab Grid
 };
 
 class TDContainerListener {
@@ -35,7 +35,7 @@ class TDContainer : public TDContainerListener {
 
    UIPanel                m_uiPanelContainer;
    TDTabTrade             m_tdTabTrade;
-   TDTabSetting           m_tdTabSetting;
+   TDTabNews              m_tdTabNews;
    TDTabGrid              m_tdTabGrid;
 
    int                    m_x;
@@ -45,17 +45,18 @@ class TDContainer : public TDContainerListener {
 
    TDTabType              m_currentTab;
 
-   string                 m_ObjNewsName;
+   string                 m_ObjTimeCurrentName;
    string                 m_ObjTabMenuTradeName;
    string                 m_ObjTabMenuGridName;
-   string                 m_ObjTabMenuSettingName;
+   string                 m_ObjTabMenuNewsName;
 
    TDContainer() {}
    ~TDContainer() {
-      ObjectDelete(g_chartId, m_ObjNewsName);
+      Print("•>[TDContainer.mqh:55]: TDContainer: Destructor called, deleting objects...");
+      ObjectDelete(g_chartId, m_ObjTimeCurrentName);
       ObjectDelete(g_chartId, m_ObjTabMenuTradeName);
       ObjectDelete(g_chartId, m_ObjTabMenuGridName);
-      ObjectDelete(g_chartId, m_ObjTabMenuSettingName);
+      ObjectDelete(g_chartId, m_ObjTabMenuNewsName);
    }
 
    void Create(int x, int y, int width, int height) {
@@ -64,7 +65,7 @@ class TDContainer : public TDContainerListener {
 
       m_uiPanelContainer.AddPanelChildName(m_ObjTabMenuTradeName);
       m_uiPanelContainer.AddPanelChildName(m_ObjTabMenuGridName);
-      m_uiPanelContainer.AddPanelChildName(m_ObjTabMenuSettingName);
+      m_uiPanelContainer.AddPanelChildName(m_ObjTabMenuNewsName);
 
       string tdTabTradeObjNameList[];
       int    countTdTabTradeObjName = m_tdTabTrade.GetObjectNameList(tdTabTradeObjNameList);
@@ -73,7 +74,7 @@ class TDContainer : public TDContainerListener {
       }
 
       string tdTabSettingObjNameList[];
-      int    countTdTabSettingObjName = m_tdTabSetting.GetObjectNameList(tdTabSettingObjNameList);
+      int    countTdTabSettingObjName = m_tdTabNews.GetObjectNameList(tdTabSettingObjNameList);
       for(int i = 0; i < countTdTabSettingObjName; i++) {
          m_uiPanelContainer.AddPanelChildName(tdTabSettingObjNameList[i]);
       }
@@ -91,17 +92,17 @@ class TDContainer : public TDContainerListener {
    void Initialize() {
       m_panelContainerListener.SetContainer(&this);
 
-      m_currentTab            = TD_TAB_TRADE;
+      m_currentTab          = TD_TAB_TRADE;
 
-      m_ObjNewsName           = "M_ObjNewsName";
-      m_ObjTabMenuTradeName   = "M_ObjTabMenuTradeName";
-      m_ObjTabMenuSettingName = "M_ObjTabMenuSettingName";
-      m_ObjTabMenuGridName    = "M_ObjTabMenuGridName";
+      m_ObjTimeCurrentName  = "Obj_TDContainer_ObjTimeCurrentName";
+      m_ObjTabMenuTradeName = "Obj_TDContainer_ObjTabMenuTradeName";
+      m_ObjTabMenuNewsName  = "Obj_TDContainer_ObjTabMenuNewsName";
+      m_ObjTabMenuGridName  = "Obj_TDContainer_ObjTabMenuGridName";
       m_uiPanelContainer.Initialize(g_chartId, "TradingPanel");
       m_uiPanelContainer.SetHeaderTitle("Trade Dashboard");
 
       m_tdTabTrade.Initialize();
-      m_tdTabSetting.Initialize();
+      m_tdTabNews.Initialize();
       m_tdTabGrid.Initialize();
    }
 
@@ -110,13 +111,24 @@ class TDContainer : public TDContainerListener {
    }
 
    void StartDraw(int x, int y, int width, int height);
-   void RefreshData();
+   void OnRealtimeRefresh();
+   void OnStrategyTesterRefresh();
    void ClickTabMenuTrade();
    void ClickTabMenuSetting();
    void ClickTabMenuGrid();
-   void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
-   void OnMQLTesterRefresh();
-   void OnMQLTesterEvent();
+   void OnRealtimeEvent(
+      const int id, const long &lparam, const double &dparam, const string &sparam
+   );
+   void OnStrategyTesterEvent();
+
+ private:
+   void RefreshData() {
+      if((bool)MQLInfoInteger(MQL_TESTER)) {
+         OnStrategyTesterRefresh();
+      } else {
+         OnRealtimeRefresh();
+      }
+   }
 };
 
 void TDContainer::StartDraw(int x, int y, int width, int height) {
@@ -130,14 +142,14 @@ void TDContainer::StartDraw(int x, int y, int width, int height) {
 
    uiCommon.CreateLabel(
       g_chartId,
-      m_ObjNewsName,
-      "NEWS: ...",
+      m_ObjTimeCurrentName,
+      "Time: ...",
       m_x + 10,
       m_y + yOffsetPanel + 10,
       8,
       clrLimeGreen
    );
-   uiCommon.setZOrder(g_chartId, m_ObjNewsName, 100);
+   uiCommon.setZOrder(g_chartId, m_ObjTimeCurrentName, 100);
 
    uiCommon.CreateButton(
       g_chartId,
@@ -168,8 +180,8 @@ void TDContainer::StartDraw(int x, int y, int width, int height) {
 
    uiCommon.CreateButton(
       g_chartId,
-      m_ObjTabMenuSettingName,
-      "Setting",
+      m_ObjTabMenuNewsName,
+      "News",
       m_x + m_width - 70,
       m_y + yOffsetPanel + 6,
       60,
@@ -178,27 +190,46 @@ void TDContainer::StartDraw(int x, int y, int width, int height) {
       clrGray,
       clrDarkGray
    );
-   uiCommon.setZOrder(g_chartId, m_ObjTabMenuSettingName, 100);
+   uiCommon.setZOrder(g_chartId, m_ObjTabMenuNewsName, 100);
 
    yOffsetPanel = yOffsetPanel + 30; // 30 is distance from header to tab content
 
    if(m_currentTab == TD_TAB_TRADE) {
       m_tdTabTrade.StartDraw(m_x, m_y + yOffsetPanel, m_width, m_height - yOffsetPanel);
-   } else if(m_currentTab == TD_TAB_SETTING) {
-      m_tdTabSetting.StartDraw(m_x, m_y + yOffsetPanel, m_width, m_height - yOffsetPanel);
+   } else if(m_currentTab == TD_TAB_NEWS) {
+      m_tdTabNews.StartDraw(m_x, m_y + yOffsetPanel, m_width, m_height - yOffsetPanel);
    } else if(m_currentTab == TD_TAB_GRID) {
       m_tdTabGrid.StartDraw(m_x, m_y + yOffsetPanel, m_width, m_height - yOffsetPanel);
    }
 }
 
-void TDContainer::RefreshData() {
+void TDContainer::OnRealtimeRefresh() {
+   // Cập nhật thời gian hiện tại
+   string timeCurrentStr = TimeToString(TimeCurrent(), TIME_DATE | TIME_SECONDS);
+   uiCommon.setText(g_chartId, m_ObjTimeCurrentName, "Time: " + timeCurrentStr);
+
    if(m_currentTab == TD_TAB_TRADE) {
       m_tdTabTrade.RefreshData();
-   } else if(m_currentTab == TD_TAB_SETTING) {
-      m_tdTabSetting.RefreshData();
+   } else if(m_currentTab == TD_TAB_NEWS) {
+      m_tdTabNews.OnRealtimeRefresh();
    } else if(m_currentTab == TD_TAB_GRID) {
       m_tdTabGrid.RefreshData();
    }
+}
+
+void TDContainer::OnStrategyTesterRefresh() {
+   // Cập nhật thời gian hiện tại
+   string timeCurrentStr = TimeToString(TimeCurrent(), TIME_DATE | TIME_SECONDS);
+   uiCommon.setText(g_chartId, m_ObjTimeCurrentName, "Time: " + timeCurrentStr);
+
+   if(m_currentTab == TD_TAB_TRADE) {
+      m_tdTabTrade.RefreshData();
+   } else if(m_currentTab == TD_TAB_NEWS) {
+      m_tdTabNews.OnStrategyTesterRefresh();
+   } else if(m_currentTab == TD_TAB_GRID) {
+      m_tdTabGrid.RefreshData();
+   }
+   m_tdTabTrade.m_tdTablePositions.RefreshTicketPositionsData();
 }
 
 void TDContainer::ClickTabMenuTrade() {
@@ -208,22 +239,22 @@ void TDContainer::ClickTabMenuTrade() {
       int yOffsetPanel
          = m_uiPanelContainer.GetHeaderHeight() + 30; // 30 is distance from header to tab content
 
-      m_tdTabSetting.DestroyDraw();
+      m_tdTabNews.DestroyDraw();
       m_tdTabGrid.DestroyDraw();
       m_tdTabTrade.StartDraw(m_x, m_y + yOffsetPanel, m_width, m_height - yOffsetPanel);
       ChartRedraw(g_chartId);
    }
 }
 void TDContainer::ClickTabMenuSetting() {
-   ObjectSetInteger(g_chartId, m_ObjTabMenuSettingName, OBJPROP_STATE, false);
-   if(m_currentTab != TD_TAB_SETTING) {
-      m_currentTab = TD_TAB_SETTING;
+   ObjectSetInteger(g_chartId, m_ObjTabMenuNewsName, OBJPROP_STATE, false);
+   if(m_currentTab != TD_TAB_NEWS) {
+      m_currentTab = TD_TAB_NEWS;
       int yOffsetPanel
          = m_uiPanelContainer.GetHeaderHeight() + 30; // 30 is distance from header to tab content
 
       m_tdTabTrade.DestroyDraw();
       m_tdTabGrid.DestroyDraw();
-      m_tdTabSetting.OpenTab(m_x, m_y + yOffsetPanel, m_width, m_height - yOffsetPanel);
+      m_tdTabNews.OpenTab(m_x, m_y + yOffsetPanel, m_width, m_height - yOffsetPanel);
       ChartRedraw(g_chartId);
    }
 }
@@ -236,23 +267,23 @@ void TDContainer::ClickTabMenuGrid() {
          = m_uiPanelContainer.GetHeaderHeight() + 30; // 30 is distance from header to tab content
 
       m_tdTabTrade.DestroyDraw();
-      m_tdTabSetting.DestroyDraw();
+      m_tdTabNews.DestroyDraw();
       m_tdTabGrid.OpenTab(m_x, m_y + yOffsetPanel, m_width, m_height - yOffsetPanel);
       ChartRedraw(g_chartId);
    }
 }
 
-void TDContainer::OnChartEvent(
+void TDContainer::OnRealtimeEvent(
    const int id, const long &lparam, const double &dparam, const string &sparam
 ) {
-   m_uiPanelContainer.OnChartEvent(id, lparam, dparam, sparam);
-   m_tdTabTrade.OnChartEvent(id, lparam, dparam, sparam);
-   m_tdTabSetting.OnChartEvent(id, lparam, dparam, sparam);
-   m_tdTabGrid.OnChartEvent(id, lparam, dparam, sparam);
+   m_uiPanelContainer.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_tdTabTrade.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_tdTabNews.OnRealtimeEvent(id, lparam, dparam, sparam);
+   m_tdTabGrid.OnRealtimeEvent(id, lparam, dparam, sparam);
    if(id == CHARTEVENT_OBJECT_CLICK) {
       if(sparam == m_ObjTabMenuTradeName) {
          ClickTabMenuTrade();
-      } else if(sparam == m_ObjTabMenuSettingName) {
+      } else if(sparam == m_ObjTabMenuNewsName) {
          ClickTabMenuSetting();
       } else if(sparam == m_ObjTabMenuGridName) {
          ClickTabMenuGrid();
@@ -260,21 +291,16 @@ void TDContainer::OnChartEvent(
    }
 }
 
-void TDContainer::OnMQLTesterRefresh() {
-   RefreshData();
-   m_tdTabTrade.m_tdTablePositions.RefreshTicketPositionsData();
-}
-
-void TDContainer::OnMQLTesterEvent() {
-   m_uiPanelContainer.OnMQLTesterEvent();
-   m_tdTabTrade.OnMQLTesterEvent();
-   m_tdTabSetting.OnMQLTesterEvent();
-   m_tdTabGrid.OnMQLTesterEvent();
+void TDContainer::OnStrategyTesterEvent() {
+   m_uiPanelContainer.OnStrategyTesterEvent();
+   m_tdTabTrade.OnStrategyTesterEvent();
+   m_tdTabNews.OnStrategyTesterEvent();
+   m_tdTabGrid.OnStrategyTesterEvent();
 
    if(uiCommon.getState(g_chartId, m_ObjTabMenuTradeName)) {
       ClickTabMenuTrade();
    }
-   if(uiCommon.getState(g_chartId, m_ObjTabMenuSettingName)) {
+   if(uiCommon.getState(g_chartId, m_ObjTabMenuNewsName)) {
       ClickTabMenuSetting();
    }
    if(uiCommon.getState(g_chartId, m_ObjTabMenuGridName)) {

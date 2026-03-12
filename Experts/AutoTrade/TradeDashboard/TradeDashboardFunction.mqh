@@ -107,12 +107,15 @@ void addGridItemDealOut(ulong ticketDeal) {
       return;
    }
 
-   ulong ticketPosition = HistoryDealGetInteger(ticketDeal, DEAL_POSITION_ID);
-   int   gridIndex      = -1;
+   ulong  ticketPosition = HistoryDealGetInteger(ticketDeal, DEAL_POSITION_ID);
+   int    gridIndex      = -1;
+   double priceOpen      = 0;
+
    for(int i = 0; i < ArraySize(g_gridList); i++) {
       for(int j = 0; j < ArraySize(g_gridList[i].ticketPositionList); j++) {
          if(g_gridList[i].ticketPositionList[j].ticketPosition == ticketPosition) {
             gridIndex = i;
+            priceOpen = g_gridList[i].ticketPositionList[j].priceOpen;
             break;
          }
       }
@@ -143,10 +146,7 @@ void addGridItemDealOut(ulong ticketDeal) {
    g_gridList[gridIndex].ticketDealList[dealIndex].fee            = fee;
    g_gridList[gridIndex].ticketDealList[dealIndex].closePrice     = closePrice;
    g_gridList[gridIndex].ticketDealList[dealIndex].dealReason     = dealReason;
-   if(PositionSelectByTicket(ticketPosition)) {
-      g_gridList[gridIndex].ticketDealList[dealIndex].openPrice
-         = PositionGetDouble(POSITION_PRICE_OPEN);
-   }
+   g_gridList[gridIndex].ticketDealList[dealIndex].priceOpen      = priceOpen;
 }
 
 void removeGridItemOrder(ulong ticketOrder) {
@@ -214,32 +214,87 @@ void recalculateGridInfo(int gridIndex) {
    double averageOpenPrice                = (totalVolume == 0) ? 0 : (totalCost / totalVolume);
    g_gridList[gridIndex].averageOpenPrice = averageOpenPrice;
 
-   if(!g_gridList[gridIndex].tsStarted) {
+   if(averageOpenPrice != 0 && !g_gridList[gridIndex].tsStarted) {
       double point            = SymbolInfoDouble(g_gridList[gridIndex].symbol, SYMBOL_POINT);
       double tsStartPoints    = g_gridList[gridIndex].tsStartPoints;
       double tsDistancePoints = g_gridList[gridIndex].tsDistancePoints;
       double tsStepPoints     = g_gridList[gridIndex].tsStepPoints;
-      if(g_gridList[gridIndex].gridType == GRID_TYPE_BUY) {
-         g_gridList[gridIndex].tsPeakPrice
-            = averageOpenPrice + (tsStartPoints - tsStepPoints) * point;
+      double takeProfitPrice  = g_gridList[gridIndex].takeProfitPrice;
 
+      double newTsPeakPrice   = 0;
+      double newStopLossPrice = 0;
+      if(g_gridList[gridIndex].gridType == GRID_TYPE_BUY) {
+         newTsPeakPrice   = averageOpenPrice + tsStartPoints * point;
+         newStopLossPrice = newTsPeakPrice - tsDistancePoints * point;
       } else if(g_gridList[gridIndex].gridType == GRID_TYPE_SELL) {
-         g_gridList[gridIndex].tsPeakPrice
-            = averageOpenPrice - (tsStartPoints - tsStepPoints) * point;
+         newTsPeakPrice   = averageOpenPrice - tsStartPoints * point;
+         newStopLossPrice = newTsPeakPrice + tsDistancePoints * point;
+      }
+
+      g_gridList[gridIndex].tsPeakPrice   = newTsPeakPrice;
+      g_gridList[gridIndex].stopLossPrice = newStopLossPrice;
+      for(int j = 0; j < ArraySize(g_gridList[gridIndex].ticketPositionList); j++) {
+         ulong ticketPosition = g_gridList[gridIndex].ticketPositionList[j].ticketPosition;
+         cTrade.PositionModify(ticketPosition, newStopLossPrice, takeProfitPrice);
       }
    }
 }
 
-// Danh sách hàm xử lý chính cho Trailing Stop, được gọi ở OnTick và OnTimer
-void StartProcessTrailingStop() {
-   int totalPositions = PositionsTotal();
-
-   // Trailing stop cho g_positionList
-   for(int i = 0; i < totalPositions; i++) {
-      // Tránh lỗi khi thực tế nhiều item hơn trong g_positionList
-      if(i >= ArraySize(g_positionList)) {
+void ProcessGridListTrailingStop() {
+   for(int i = 0; i < ArraySize(g_gridList); i++) {
+      if(!g_gridList[i].enableTrailingStop) {
          continue;
       }
+      if(g_gridList[i].averageOpenPrice == 0) {
+         continue;
+      }
+      if(ArraySize(g_gridList[i].ticketPositionList) == 0) {
+         continue;
+      }
+
+      string symbol           = g_gridList[i].symbol;
+      double priceOpen        = g_gridList[i].averageOpenPrice;
+      double sl               = g_gridList[i].stopLossPrice;
+      double tp               = g_gridList[i].takeProfitPrice;
+
+      double tsStartPoints    = g_gridList[i].tsStartPoints;
+      double tsStepPoints     = g_gridList[i].tsStepPoints;
+      double tsDistancePoints = g_gridList[i].tsDistancePoints;
+      double tsPeakPrice      = g_gridList[i].tsPeakPrice;
+
+      double point            = SymbolInfoDouble(symbol, SYMBOL_POINT);
+
+      if(g_gridList[i].gridType == GRID_TYPE_BUY) {
+         double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+         if(bid >= tsPeakPrice) {
+            g_gridList[i].tsStarted   = true;
+            g_gridList[i].tsPeakPrice = bid + tsStepPoints * point;
+            double newStopLoss        = bid - tsDistancePoints * point;
+            for(int j = 0; j < ArraySize(g_gridList[i].ticketPositionList); j++) {
+               ulong ticketPosition = g_gridList[i].ticketPositionList[j].ticketPosition;
+               cTrade.PositionModify(ticketPosition, newStopLoss, tp);
+            }
+            g_gridList[i].stopLossPrice = newStopLoss;
+         }
+      }
+      if(g_gridList[i].gridType == GRID_TYPE_SELL) {
+         double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+         if(tsPeakPrice - ask >= tsStepPoints * point) {
+            g_gridList[i].tsStarted   = true;
+            g_gridList[i].tsPeakPrice = ask;
+            double newStopLoss        = ask + tsDistancePoints * point;
+            for(int j = 0; j < ArraySize(g_gridList[i].ticketPositionList); j++) {
+               ulong ticketPosition = g_gridList[i].ticketPositionList[j].ticketPosition;
+               cTrade.PositionModify(ticketPosition, newStopLoss, tp);
+            }
+            g_gridList[i].stopLossPrice = newStopLoss;
+         }
+      }
+   }
+}
+
+void ProcessTradeNormalTrailingStop() {
+   for(int i = 0; i < ArraySize(g_positionList); i++) {
       if(!g_positionList[i].enableTrailingStop) {
          continue;
       }
@@ -278,58 +333,59 @@ void StartProcessTrailingStop() {
          }
       }
    }
+}
 
-   // Trailing stop cho g_gridList
-   for(int i = 0; i < ArraySize(g_gridList); i++) {
-      if(!g_gridList[i].enableTrailingStop) {
-         continue;
+void ProcessNewsSetting() {
+   if(ArraySize(g_newsList) == 0) {
+      return;
+   }
+
+   if(g_beforeNewsProtectionEnable && g_beforeNewsMinutes > 0) {
+      // Tại môi trường tester, thì timeCurrent lấy thời gian test, không phải thời gian hệ thống
+      datetime now = TimeCurrent();
+
+      // Print("Current tick time: ", TimeToString(now, TIME_DATE | TIME_SECONDS));
+      // MqlTick tick;
+      // if(SymbolInfoTick(_Symbol, tick)) {
+      //    datetime tick_time = tick.time;
+      //    Print("Tick time: ", TimeToString(tick_time, TIME_DATE | TIME_SECONDS));
+      // }
+      bool isBeforeNews = false;
+      for(int i = 0; i < ArraySize(g_newsList); i++) {
+         datetime newsTime = g_newsList[i].time;
+         if(newsTime - g_beforeNewsMinutes * 60 < now && now < newsTime) {
+            isBeforeNews = true;
+            break;
+         }
       }
-      if(g_gridList[i].averageOpenPrice == 0) {
-         continue;
-      }
-      if(ArraySize(g_gridList[i].ticketPositionList) == 0) {
-         continue;
-      }
 
-      string symbol           = g_gridList[i].symbol;
-      double priceOpen        = g_gridList[i].averageOpenPrice;
-      double sl               = g_gridList[i].stopLossPrice;
-      double tp               = g_gridList[i].takeProfitPrice;
-
-      double tsStartPoints    = g_gridList[i].tsStartPoints;
-      double tsStepPoints     = g_gridList[i].tsStepPoints;
-      double tsDistancePoints = g_gridList[i].tsDistancePoints;
-      double tsPeakPrice      = g_gridList[i].tsPeakPrice;
-      double point            = SymbolInfoDouble(symbol, SYMBOL_POINT);
-
-      if(g_gridList[i].gridType == GRID_TYPE_BUY) {
-         double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-         if(bid - tsPeakPrice >= tsStepPoints * point) {
-            g_gridList[i].tsStarted   = true;
-            g_gridList[i].tsPeakPrice = bid;
-            double newStopLoss        = bid - tsDistancePoints * point;
-            for(int j = 0; j < ArraySize(g_gridList[i].ticketPositionList); j++) {
-               ulong ticketPosition = g_gridList[i].ticketPositionList[j].ticketPosition;
-               cTrade.PositionModify(ticketPosition, newStopLoss, tp);
-            }
-            for(int j = 0; j < ArraySize(g_gridList[i].ticketOrderList); j++) {
-               ulong ticketOrder = g_gridList[i].ticketOrderList[j].ticketOrder;
-               if(newStopLoss < g_gridList[i].ticketOrderList[j].priceOpen) {
-                  cTrade.OrderModify(
-                     ticketOrder,
-                     g_gridList[i].ticketOrderList[j].priceOpen,
-                     newStopLoss,
-                     tp,
-                     ORDER_TIME_GTC,
-                     0,
-                     0
-                  );
+      if(isBeforeNews) {
+         if(g_beforeNewsEnableCloseAllOrder) {
+            int total = OrdersTotal();
+            for(int i = total - 1; i >= 0; i--) {
+               ulong ticketOrder = OrderGetTicket(i);
+               if(!OrderSelect(ticketOrder)) {
+                  cTrade.OrderDelete(OrderGetInteger(ORDER_TICKET));
                }
             }
-            g_gridList[i].stopLossPrice = newStopLoss;
+         }
+         if(g_beforeNewsEnableCloseAllPosition) {
+            int total = PositionsTotal();
+            for(int i = total - 1; i >= 0; i--) {
+               ulong ticketPosition = PositionGetTicket(i);
+               if(PositionSelectByTicket(ticketPosition)) {
+                  cTrade.PositionClose(ticketPosition);
+               }
+            }
          }
       }
    }
+}
+
+void ProcessBusinessSetting() {
+   ProcessGridListTrailingStop();
+   ProcessTradeNormalTrailingStop();
+   ProcessNewsSetting();
 }
 
 #endif // TRADE_DASHBOARD_FUNCTION_MQH

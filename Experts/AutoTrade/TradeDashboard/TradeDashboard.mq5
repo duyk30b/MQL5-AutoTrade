@@ -27,13 +27,6 @@ UICommon        uiCommon;
 TDContainer     tdContainer;
 TDPopupPosition tdPopupPosition;
 
-input int       g_slPointsDefault           = 500;
-input int       g_tpPointsDefault           = 1000;
-input bool      g_enableTrailingStopDefault = true;
-input int       g_tsStartPointsDefault      = 500;
-input int       g_tsStepPointsDefault       = 10;
-input int       g_tsDistancePointsDefault   = 100;
-
 PositionInfo    g_positionList[];
 
 //+------------------------------------------------------------------+
@@ -44,6 +37,8 @@ int OnInit() {
    EventSetMillisecondTimer(500);
    cTrade.SetExpertMagicNumber(MagicNumber);
    cTrade.SetDeviationInPoints(Slippage);
+   g_chartId = ChartID();
+   Print("g_chartId: ", g_chartId);
 
    Print(" ACCOUNT_LEVERAGE : " + IntegerToString(AccountInfoInteger(ACCOUNT_LEVERAGE)));
    Print(" ACCOUNT_MARGIN_SO_CALL : " + DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN_SO_CALL)));
@@ -73,13 +68,6 @@ int OnInit() {
    }
 
    tdContainer.Create(20, 20, 500, 590);
-   tdContainer.m_tdTabTrade.SetStopLossPoints(g_slPointsDefault);
-   tdContainer.m_tdTabTrade.SetTakeProfitPoints(g_tpPointsDefault);
-   tdContainer.m_tdTabTrade.SetEnableTrailingStop(g_enableTrailingStopDefault);
-   tdContainer.m_tdTabTrade.SetTrailingStopStartPoints(g_tsStartPointsDefault);
-   tdContainer.m_tdTabTrade.SetTrailingStopStepPoints(g_tsStepPointsDefault);
-   tdContainer.m_tdTabTrade.SetTrailingStopDistancePoints(g_tsDistancePointsDefault);
-
    tdPopupPosition.Initialize();
    tdPopupPosition.StartDraw(520, 20, 300, 390, false);
    Print("Create Panel Success!");
@@ -101,26 +89,36 @@ void OnDeinit(const int reason) {
 
 void OnTick() {
    if((bool)MQLInfoInteger(MQL_TESTER) && (bool)MQLInfoInteger(MQL_VISUAL_MODE)) {
+      // Setup cho event
       // Không gọi 2 hàm này ở onTimer, vì ở môi trường Test, onTimer chỉ được chạy khi có tick
-      OnMQLTesterEvent();
-      OnMQLTesterRefresh();
+      OnStrategyTesterEvent();
+      OnStrategyTesterRefresh();
    }
    if(!(bool)MQLInfoInteger(MQL_TESTER)) {
-      tdContainer.RefreshData();
+      OnRealtimeRefresh();
    }
-   StartProcessTrailingStop();
+   ProcessBusinessSetting();
 }
 
 void OnTimer() {
+   // OnTimer không hoạt động ở môi trường Test, nên chỉ gọi hàm refresh ở môi trường Realtime
    if(!(bool)MQLInfoInteger(MQL_TESTER)) {
-      tdContainer.RefreshData();
-      StartProcessTrailingStop();
+      OnRealtimeRefresh();
+      ProcessBusinessSetting();
    }
 }
 
-void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam) {
-   tdContainer.OnChartEvent(id, lparam, dparam, sparam);
-   tdPopupPosition.OnChartEvent(id, lparam, dparam, sparam);
+void OnRealtimeRefresh() {
+   tdContainer.OnRealtimeRefresh();
+}
+
+void OnStrategyTesterRefresh() {
+   if((GetTickCount() - lastUITimerRefresh) < 500) {
+      return;
+   }
+   lastUITimerRefresh = GetTickCount();
+
+   tdContainer.OnStrategyTesterRefresh();
 }
 
 void OnTradeTransaction(
@@ -198,31 +196,22 @@ void OnTradeTransaction(
    }
 }
 
-void OnMQLTesterEvent() {
+void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam) {
+   tdContainer.OnRealtimeEvent(id, lparam, dparam, sparam);
+   tdPopupPosition.OnRealtimeEvent(id, lparam, dparam, sparam);
+}
+
+void OnStrategyTesterEvent() {
    if((GetTickCount() - lastUITimerEvent) < 100) {
       return;
    }
    lastUITimerEvent = GetTickCount();
 
-   tdContainer.OnMQLTesterEvent();
-   tdPopupPosition.OnMQLTesterEvent();
-}
-
-void OnMQLTesterRefresh() {
-   if((GetTickCount() - lastUITimerRefresh) < 500) {
-      return;
-   }
-   lastUITimerRefresh = GetTickCount();
-
-   tdContainer.OnMQLTesterRefresh();
-   tdPopupPosition.OnMQLTesterRefresh();
+   tdContainer.OnStrategyTesterEvent();
+   tdPopupPosition.OnStrategyTesterEvent();
 }
 
 // Danh sách các hàm callback
 void openPopupModifyPosition(ulong ticketId) {
    tdPopupPosition.openPopup(ticketId);
-}
-
-void changeVolumeRisk() {
-   tdContainer.RefreshData();
 }

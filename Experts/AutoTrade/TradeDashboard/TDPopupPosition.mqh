@@ -4,81 +4,46 @@
 #include <AutoTrade/UI/UIInputNumber.mqh>
 #include <AutoTrade/UI/UIPanel.mqh>
 
-class PopupPositionListener {
+class TDPopupPosition : public UIListener {
  public:
-   virtual void onIsMinimizedPanelChange(bool _isMinimized) = 0;
-   virtual void onCheckedTrailingStopChange(bool newValue)  = 0;
-};
+   bool               m_isShow;
+   ulong              m_ticketId;
+   int                m_x;
+   int                m_y;
+   int                m_width;
+   int                m_height;
 
-class PopupPositionPanelListener : public UIPanelListener {
- public:
-   PopupPositionListener *m_popup;
-   virtual void           onIsMinimizedChange(bool _isMinimized) override {
-      if(m_popup) {
-         m_popup.onIsMinimizedPanelChange(_isMinimized);
-      }
-   };
-   void SetPopupPosition(PopupPositionListener *popup) { m_popup = popup; };
-};
+   double             m_openPrice;
+   double             m_Point;
+   ENUM_POSITION_TYPE m_type;
 
-class PopupCheckboxTrailingStopListener : public UIInputCheckboxListener {
- public:
-   PopupPositionListener *m_popup;
-   virtual void           onChangeValue(bool newValue) override {
-      if(m_popup) {
-         m_popup.onCheckedTrailingStopChange(newValue);
-      }
-   };
-   void SetPopupPosition(PopupPositionListener *popup) { m_popup = popup; };
-};
+   UIPanel            m_uiPanelPopup;
 
-class TDPopupPosition : public PopupPositionListener {
- public:
-   PopupPositionPanelListener        m_popupPanelListener;
-   PopupCheckboxTrailingStopListener m_popupCheckboxTSListener;
+   UIInputNumber      m_ipTakeProfitPoints;
+   UIInputNumber      m_ipTakeProfitPrice;
+   UIInputNumber      m_ipStopLossPoints;
+   UIInputNumber      m_ipStopLossPrice;
 
-   long                              m_chartId;
-   bool                              m_isShow;
-   ulong                             m_ticketId;
-   int                               m_x;
-   int                               m_y;
-   int                               m_width;
-   int                               m_height;
+   UIInputCheckbox    m_cbTrailingStopEnable;
+   bool               m_enableTrailingStop;
 
-   double                            m_openPrice;
-   double                            m_Point;
-   ENUM_POSITION_TYPE                m_type;
+   UIInputNumber      m_ipTSStartPoints;
+   UIInputNumber      m_ipTSStartPrice;
+   UIInputNumber      m_ipTSStepPoints;
+   UIInputNumber      m_ipTSStepPrice;
+   UIInputNumber      m_ipTSDistancePoints;
+   UIInputNumber      m_ipTSDistancePrice;
 
-   UIPanel                           m_uiPanelPopup;
+   string             m_ObjInfoLabelName;
+   string             m_ObjBtnSubmitName;
+   string             m_ObjBtnCancelName;
 
-   UIInputNumber                     m_ipTakeProfitPoints;
-   UIInputNumber                     m_ipTakeProfitPrice;
-   UIInputNumber                     m_ipStopLossPoints;
-   UIInputNumber                     m_ipStopLossPrice;
+   color              clrBtnSubmitBg;
+   color              clrBtnSubmitBorder;
+   color              clrBtnCancelBg;
+   color              clrBtnCancelBorder;
 
-   UIInputCheckbox                   m_cbTrailingStopEnable;
-   bool                              m_enableTrailingStop;
-
-   UIInputNumber                     m_ipTSStartPoints;
-   UIInputNumber                     m_ipTSStartPrice;
-   UIInputNumber                     m_ipTSStepPoints;
-   UIInputNumber                     m_ipTSStepPrice;
-   UIInputNumber                     m_ipTSDistancePoints;
-   UIInputNumber                     m_ipTSDistancePrice;
-
-   string                            m_ObjInfoLabelName;
-   string                            m_ObjBtnSubmitName;
-   string                            m_ObjBtnCancelName;
-
-   color                             clrBtnSubmitBg;
-   color                             clrBtnSubmitBorder;
-   color                             clrBtnCancelBg;
-   color                             clrBtnCancelBorder;
-
-   void                              Initialize() {
-      m_popupPanelListener.SetPopupPosition(&this);
-      m_popupCheckboxTSListener.SetPopupPosition(&this);
-
+   void               Initialize() {
       m_ipStopLossPoints.SetCallback(&this, TDPopupPosition::OnChangeStopLossPoints);
       m_ipStopLossPrice.SetCallback(&this, TDPopupPosition::OnChangeStopLossPrice);
       m_ipTakeProfitPoints.SetCallback(&this, TDPopupPosition::OnChangeTakeProfitPoints);
@@ -89,8 +54,6 @@ class TDPopupPosition : public PopupPositionListener {
       m_ipTSStepPrice.SetCallback(&this, TDPopupPosition::OnChangeTSStepPrice);
       m_ipTSDistancePoints.SetCallback(&this, TDPopupPosition::OnChangeTSDistancePoints);
       m_ipTSDistancePrice.SetCallback(&this, TDPopupPosition::OnChangeTSDistancePrice);
-
-      m_cbTrailingStopEnable.SetListener(&m_popupCheckboxTSListener);
 
       m_ObjInfoLabelName = "PP_OBJ_INFO_LABEL_NAME";
       m_ObjBtnSubmitName = "PP_OBJ_BTN_SUBMIT_NAME";
@@ -138,12 +101,9 @@ class TDPopupPosition : public PopupPositionListener {
       }
    }
 
-   virtual void onIsMinimizedPanelChange(bool _isMinimized) override {
-      Print("•>[TDPopupPosition.mqh:141]: _isMinimized: ", _isMinimized);
-   }
-
-   virtual void onCheckedTrailingStopChange(bool newValue) override {
-      SetEnableTrailingStop(newValue);
+   virtual void listen(void *child, UI_EVENT_TYPE type, double value) override {
+      // Print("TDTabGrid listen: type=", type, " value=", value, " child=", child);
+      // Print("m_ipSelectGrid: ", &m_ipSelectGrid);
    }
 
    // phải là hàm static để có thể truyền vào callback của UIInputNumber
@@ -286,7 +246,7 @@ class TDPopupPosition : public PopupPositionListener {
          (m_type == POSITION_TYPE_BUY) ? "BUY" : "SELL",
          volume
       );
-      uiCommon.setText(0, m_ObjInfoLabelName, infoText);
+      uiCommon.setText(g_chartId, m_ObjInfoLabelName, infoText);
 
       bool   enableTrailingStop = false;
       double stopLossPoints     = 0;
@@ -339,7 +299,7 @@ class TDPopupPosition : public PopupPositionListener {
    }
 
    void HandleClickSubmit() {
-      uiCommon.setState(0, m_ObjBtnSubmitName, false);
+      uiCommon.setState(g_chartId, m_ObjBtnSubmitName, false);
       double sl = m_ipStopLossPrice.GetValue();
       double tp = m_ipTakeProfitPrice.GetValue();
 
@@ -368,24 +328,26 @@ class TDPopupPosition : public PopupPositionListener {
    }
 
    void HandleClickCancel() {
-      uiCommon.setState(0, m_ObjBtnCancelName, false);
+      uiCommon.setState(g_chartId, m_ObjBtnCancelName, false);
       m_isShow = false;
       m_uiPanelPopup.Close();
    }
 
-   bool OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam) {
-      m_uiPanelPopup.OnChartEvent(id, lparam, dparam, sparam);
-      m_ipStopLossPoints.OnChartEvent(id, lparam, dparam, sparam);
-      m_ipStopLossPrice.OnChartEvent(id, lparam, dparam, sparam);
-      m_ipTakeProfitPoints.OnChartEvent(id, lparam, dparam, sparam);
-      m_ipTakeProfitPrice.OnChartEvent(id, lparam, dparam, sparam);
-      m_cbTrailingStopEnable.OnChartEvent(id, lparam, dparam, sparam);
-      m_ipTSStartPoints.OnChartEvent(id, lparam, dparam, sparam);
-      m_ipTSStartPrice.OnChartEvent(id, lparam, dparam, sparam);
-      m_ipTSStepPoints.OnChartEvent(id, lparam, dparam, sparam);
-      m_ipTSStepPrice.OnChartEvent(id, lparam, dparam, sparam);
-      m_ipTSDistancePoints.OnChartEvent(id, lparam, dparam, sparam);
-      m_ipTSDistancePrice.OnChartEvent(id, lparam, dparam, sparam);
+   bool OnRealtimeEvent(
+      const int id, const long &lparam, const double &dparam, const string &sparam
+   ) {
+      m_uiPanelPopup.OnRealtimeEvent(id, lparam, dparam, sparam);
+      m_ipStopLossPoints.OnRealtimeEvent(id, lparam, dparam, sparam);
+      m_ipStopLossPrice.OnRealtimeEvent(id, lparam, dparam, sparam);
+      m_ipTakeProfitPoints.OnRealtimeEvent(id, lparam, dparam, sparam);
+      m_ipTakeProfitPrice.OnRealtimeEvent(id, lparam, dparam, sparam);
+      m_cbTrailingStopEnable.OnRealtimeEvent(id, lparam, dparam, sparam);
+      m_ipTSStartPoints.OnRealtimeEvent(id, lparam, dparam, sparam);
+      m_ipTSStartPrice.OnRealtimeEvent(id, lparam, dparam, sparam);
+      m_ipTSStepPoints.OnRealtimeEvent(id, lparam, dparam, sparam);
+      m_ipTSStepPrice.OnRealtimeEvent(id, lparam, dparam, sparam);
+      m_ipTSDistancePoints.OnRealtimeEvent(id, lparam, dparam, sparam);
+      m_ipTSDistancePrice.OnRealtimeEvent(id, lparam, dparam, sparam);
 
       if(id == CHARTEVENT_OBJECT_CLICK) {
          // Xử lý click nút Submit
@@ -401,29 +363,27 @@ class TDPopupPosition : public PopupPositionListener {
       return true;
    }
 
-   void OnMQLTesterEvent() {
-      m_uiPanelPopup.OnMQLTesterEvent();
-      m_ipStopLossPoints.OnMQLTesterEvent();
-      m_ipStopLossPrice.OnMQLTesterEvent();
-      m_ipTakeProfitPoints.OnMQLTesterEvent();
-      m_ipTakeProfitPrice.OnMQLTesterEvent();
-      m_cbTrailingStopEnable.OnMQLTesterEvent();
-      m_ipTSStartPoints.OnMQLTesterEvent();
-      m_ipTSStartPrice.OnMQLTesterEvent();
-      m_ipTSStepPoints.OnMQLTesterEvent();
-      m_ipTSStepPrice.OnMQLTesterEvent();
-      m_ipTSDistancePoints.OnMQLTesterEvent();
-      m_ipTSDistancePrice.OnMQLTesterEvent();
+   void OnStrategyTesterEvent() {
+      m_uiPanelPopup.OnStrategyTesterEvent();
+      m_ipStopLossPoints.OnStrategyTesterEvent();
+      m_ipStopLossPrice.OnStrategyTesterEvent();
+      m_ipTakeProfitPoints.OnStrategyTesterEvent();
+      m_ipTakeProfitPrice.OnStrategyTesterEvent();
+      m_cbTrailingStopEnable.OnStrategyTesterEvent();
+      m_ipTSStartPoints.OnStrategyTesterEvent();
+      m_ipTSStartPrice.OnStrategyTesterEvent();
+      m_ipTSStepPoints.OnStrategyTesterEvent();
+      m_ipTSStepPrice.OnStrategyTesterEvent();
+      m_ipTSDistancePoints.OnStrategyTesterEvent();
+      m_ipTSDistancePrice.OnStrategyTesterEvent();
 
-      if(uiCommon.getState(m_chartId, m_ObjBtnSubmitName)) {
+      if(uiCommon.getState(g_chartId, m_ObjBtnSubmitName)) {
          HandleClickSubmit();
       }
-      if(uiCommon.getState(m_chartId, m_ObjBtnCancelName)) {
+      if(uiCommon.getState(g_chartId, m_ObjBtnCancelName)) {
          HandleClickCancel();
       }
    }
-
-   void OnMQLTesterRefresh() {}
 };
 
 void TDPopupPosition::StartDraw(int x, int y, int width, int height, bool isShow) {
@@ -439,7 +399,7 @@ void TDPopupPosition::StartDraw(int x, int y, int width, int height, bool isShow
    int yOffsetPanel = m_uiPanelPopup.GetHeaderHeight();
 
    uiCommon.CreateLabel(
-      m_chartId,
+      g_chartId,
       m_ObjInfoLabelName,
       "Ticket: ...",
       m_x + 10,
@@ -500,7 +460,7 @@ void TDPopupPosition::StartDraw(int x, int y, int width, int height, bool isShow
    yOffsetPanel = yOffsetPanel + 60;
 
    // Tạo checkbox Trailing Stop
-   m_cbTrailingStopEnable.SetLabel("Enable Trailing Stop", clrWhite);
+   m_cbTrailingStopEnable.SetLabel("Enable Trailing Stop");
    m_cbTrailingStopEnable.SetValue(true);
    m_cbTrailingStopEnable.StartDraw(m_x + 10, m_y + yOffsetPanel, 10);
 

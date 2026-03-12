@@ -8,9 +8,9 @@ class UtilString {
       string searchKey = key + "=";
       int    startPos  = StringFind(encodedString, searchKey);
       if(startPos == -1) {
-         return "";                         // Không tìm thấy key
+         return "";                       // Không tìm thấy key
       }
-      startPos   += StringLen(searchKey);   // Vị trí bắt đầu của value
+      startPos   += StringLen(searchKey); // Vị trí bắt đầu của value
       int endPos  = StringFind(encodedString, ";", startPos);
       if(endPos == -1) {
          endPos = StringLen(encodedString); // Nếu không có dấu ; thì lấy đến hết chuỗi
