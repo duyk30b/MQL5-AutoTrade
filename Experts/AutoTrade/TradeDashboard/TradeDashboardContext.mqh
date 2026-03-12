@@ -4,11 +4,11 @@
 #include <AutoTrade/UI/UICommon.mqh>
 #include <Trade/Trade.mqh>
 
-enum ENUM_VOLUME_TYPE {
-   VOLUME_TYPE_INPUT, // Lấy volume từ input
-   VOLUME_TYPE_MONEY,
-   VOLUME_TYPE_PERCENT_BALANCE,
-   VOLUME_TYPE_PERCENT_EQUITY
+enum ENUM_VOLUME_RISK {
+   VOLUME_RISK_INPUT, // Lấy volume từ input
+   VOLUME_RISK_MONEY,
+   VOLUME_RISK_PERCENT_BALANCE,
+   VOLUME_RISK_PERCENT_EQUITY
 };
 
 input ulong      MagicNumber   = 20260206;
@@ -16,13 +16,8 @@ input int        Slippage      = 5;
 
 long             g_chartId     = 0;
 
-ENUM_VOLUME_TYPE g_volumeType  = VOLUME_TYPE_INPUT;
+ENUM_VOLUME_RISK g_volumeType  = VOLUME_RISK_INPUT;
 double           g_volumeValue = 0;
-
-bool             g_enableTrailingStop;
-int              g_tsStartPoints;
-int              g_tsStepPoints;
-int              g_tsDistancePoints;
 
 // clang-format off
 color g_clrBtnGreenBg        = C'0,128,0';    // ForestGreen
@@ -91,7 +86,7 @@ struct GridTicketDealInfo {
    ulong            ticketPosition;
    ENUM_DEAL_REASON dealReason;
    double           volume;
-   double           openPrice;
+   double           priceOpen;
    double           closePrice;
    double           profit;
    double           swap;
@@ -107,10 +102,11 @@ struct GridInfo {
    double                 averageOpenPrice;
    bool                   enableTrailingStop;
    bool                   tsStarted;
-   double                 tsPeakPrice;
    int                    tsStartPoints;
    int                    tsStepPoints;
    int                    tsDistancePoints;
+   double                 tsPeakPrice;
+
    ENUM_GRID_TYPE         gridType; // Loại grid hiện tại (Buy/Sell)
    GridTicketOrderInfo    ticketOrderList[];
    GridTicketPositionInfo ticketPositionList[];
@@ -118,10 +114,71 @@ struct GridInfo {
 };
 
 GridInfo g_gridList[];
-string   GridNameKey = "GridName";
+string   GridNameKey                        = "GridName";
+
+bool     g_beforeNewsProtectionEnable       = false;
+int      g_beforeNewsMinutes                = 15;
+bool     g_beforeNewsEnableStopNewOrder     = false;
+bool     g_beforeNewsEnableCloseAllOrder    = false;
+bool     g_beforeNewsEnableCloseAllPosition = false;
+bool     g_affterNewsProtectionEnable       = false;
+struct NewsItem {
+   datetime                       time;
+   string                         currency;
+   string                         title;
+   ENUM_CALENDAR_EVENT_IMPORTANCE importance;
+   long                           forecast;
+   long                           previous;
+   long                           actual;
+   uint                           digits;
+   ENUM_CALENDAR_EVENT_MULTIPLIER multiplier;
+   ENUM_CALENDAR_EVENT_UNIT       unit;
+
+   // Chuyển đổi giá trị forecast, previous, actual thành string hiển thị
+   string CalendarValueToString(
+      long _value, ENUM_CALENDAR_EVENT_MULTIPLIER _multiplier, ENUM_CALENDAR_EVENT_UNIT _unit
+   ) {
+      if(_value == LONG_MIN || _value == 0) {
+         return "-";
+      }
+      double valueReal = _value / 1000000.0;
+      string valueStr  = DoubleToString(valueReal, 3);
+
+      if(_multiplier == CALENDAR_MULTIPLIER_THOUSANDS) {
+         return valueStr += " K";
+      } else if(_multiplier == CALENDAR_MULTIPLIER_MILLIONS) {
+         return valueStr += " M";
+      } else if(_multiplier == CALENDAR_MULTIPLIER_BILLIONS) {
+         return valueStr += " B";
+      } else if(_multiplier == CALENDAR_MULTIPLIER_TRILLIONS) {
+         return valueStr += "T";
+      }
+
+      if(_unit == CALENDAR_UNIT_PERCENT) {
+         return valueStr += "%";
+      } else if(_unit == CALENDAR_UNIT_USD) {
+         return "$" + valueStr;
+      }
+
+      return valueStr;
+   }
+
+   string GetImportanceStr() {
+      switch(importance) {
+         case CALENDAR_IMPORTANCE_NONE    : return "-";
+         case CALENDAR_IMPORTANCE_LOW     : return "Low";
+         case CALENDAR_IMPORTANCE_MODERATE: return "Moderate";
+         case CALENDAR_IMPORTANCE_HIGH    : return "High";
+      }
+      return "";
+   }
+   string GetForecastStr() { return CalendarValueToString(forecast, multiplier, unit); }
+   string GetPreviousStr() { return CalendarValueToString(previous, multiplier, unit); }
+   string GetActualStr() { return CalendarValueToString(actual, multiplier, unit); }
+};
+NewsItem g_newsList[];
 
 void     openPopupModifyPosition(ulong ticketId);
-void     changeVolumeRisk();
 
 double   CalculateSafeMaxLot(string symbol, double lotStep, double minLot, double brokerMaxLot) {
    double accountEquity = AccountInfoDouble(ACCOUNT_EQUITY);
@@ -153,10 +210,10 @@ double   CalculateSafeMaxLot(string symbol, double lotStep, double minLot, doubl
 
 double CalculateVolumeWithRiskMoney(double riskMoney, double stopLossPoints, string symbol) {
    SymbolInfoTick(symbol, Tick);
-   double priceOpen = Tick.ask; // Giá mở lệnh BUY sẽ là giá Ask, SELL sẽ là giá Bid
-   double lotStep   = SymbolInfoDouble(symbol, SYMBOL_VOLUME_STEP);
-   double minLot    = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MIN);
-   double maxLot    = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MAX);
+   double priceOpen     = Tick.ask; // Giá mở lệnh BUY sẽ là giá Ask, SELL sẽ là giá Bid
+   double lotStep       = SymbolInfoDouble(symbol, SYMBOL_VOLUME_STEP);
+   double minLot        = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MIN);
+   double maxLot        = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MAX);
 
    double valuePerPoint = 0.0;
    bool   checked       = OrderCalcProfit(

@@ -140,8 +140,10 @@ class UIPanel {
 
    // Xử lý sự kiện
    void HandleClickBtnMinimize();
-   void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
-   void OnMQLTesterEvent();
+   void OnRealtimeEvent(
+      const int id, const long &lparam, const double &dparam, const string &sparam
+   );
+   void OnStrategyTesterEvent();
 
  private:
    // Tạo các thành phần
@@ -215,8 +217,10 @@ void UIPanel::StartRedrawChart() {
 bool UIPanel::DrawHeader() {
    PanelChild panelHeader = GetPanelHeader();
    string     objName     = panelHeader.objName;
-   if(!ObjectCreate(m_chartId, objName, OBJ_RECTANGLE_LABEL, 0, 0, 0))
+   if(!ObjectCreate(m_chartId, objName, OBJ_RECTANGLE_LABEL, 0, 0, 0)) {
+      Print("Failed to create header: ", objName, " Error: ", GetLastError());
       return false;
+   }
    ObjectSetInteger(m_chartId, objName, OBJPROP_XDISTANCE, m_x + panelHeader.offsetX);
    ObjectSetInteger(m_chartId, objName, OBJPROP_YDISTANCE, m_y + panelHeader.offsetY);
    ObjectSetInteger(m_chartId, objName, OBJPROP_XSIZE, m_width);
@@ -277,8 +281,10 @@ bool UIPanel::DrawHeaderTitle() {
 bool UIPanel::DrawHeaderButtonMin() {
    PanelChild panelHeaderBtnMin = GetPanelHeaderBtnMin();
    string     objName           = panelHeaderBtnMin.objName;
-   if(!ObjectCreate(m_chartId, objName, OBJ_BUTTON, 0, 0, 0))
+   if(!ObjectCreate(m_chartId, objName, OBJ_BUTTON, 0, 0, 0)) {
+      Print("Failed to create minimize button: ", objName, " Error: ", GetLastError());
       return false;
+   }
    ObjectSetInteger(m_chartId, objName, OBJPROP_XDISTANCE, m_x + panelHeaderBtnMin.offsetX);
    ObjectSetInteger(m_chartId, objName, OBJPROP_YDISTANCE, m_y + panelHeaderBtnMin.offsetY);
    ObjectSetInteger(m_chartId, objName, OBJPROP_XSIZE, 20);
@@ -309,8 +315,10 @@ bool UIPanel::DrawHeaderButtonMin() {
 bool UIPanel::DrawHeaderButtonLock() {
    PanelChild panelHeaderBtnLock = GetPanelHeaderBtnLock();
    string     objName            = panelHeaderBtnLock.objName;
-   if(!ObjectCreate(m_chartId, objName, OBJ_BUTTON, 0, 0, 0))
+   if(!ObjectCreate(m_chartId, objName, OBJ_BUTTON, 0, 0, 0)) {
+      Print("Failed to create lock button: ", objName, " Error: ", GetLastError());
       return false;
+   }
    ObjectSetInteger(m_chartId, objName, OBJPROP_XDISTANCE, m_x + panelHeaderBtnLock.offsetX);
    ObjectSetInteger(m_chartId, objName, OBJPROP_YDISTANCE, m_y + panelHeaderBtnLock.offsetY);
    ObjectSetInteger(m_chartId, objName, OBJPROP_XSIZE, 20);
@@ -341,8 +349,10 @@ bool UIPanel::DrawHeaderButtonLock() {
 bool UIPanel::DrawHeaderButtonClose() {
    PanelChild panelHeaderBtnClose = GetPanelHeaderBtnClose();
    string     objName             = panelHeaderBtnClose.objName;
-   if(!ObjectCreate(m_chartId, objName, OBJ_BUTTON, 0, 0, 0))
+   if(!ObjectCreate(m_chartId, objName, OBJ_BUTTON, 0, 0, 0)) {
+      Print("Failed to create close button: ", objName, " Error: ", GetLastError());
       return false;
+   }
    ObjectSetInteger(m_chartId, objName, OBJPROP_XDISTANCE, m_x + panelHeaderBtnClose.offsetX);
    ObjectSetInteger(m_chartId, objName, OBJPROP_YDISTANCE, m_y + panelHeaderBtnClose.offsetY);
    ObjectSetInteger(m_chartId, objName, OBJPROP_XSIZE, 20);
@@ -375,8 +385,10 @@ bool UIPanel::DrawHeaderButtonClose() {
 bool UIPanel::DrawContentBackground() {
    PanelChild panelContentBackground = GetPanelContentBackground();
    string     objName                = panelContentBackground.objName;
-   if(!ObjectCreate(m_chartId, objName, OBJ_RECTANGLE_LABEL, 0, 0, 0))
+   if(!ObjectCreate(m_chartId, objName, OBJ_RECTANGLE_LABEL, 0, 0, 0)) {
+      Print("Failed to create content background: ", objName, " Error: ", GetLastError());
       return false;
+   }
    ObjectSetInteger(m_chartId, objName, OBJPROP_XDISTANCE, m_x + panelContentBackground.offsetX);
    ObjectSetInteger(m_chartId, objName, OBJPROP_YDISTANCE, m_y + panelContentBackground.offsetY);
    ObjectSetInteger(m_chartId, objName, OBJPROP_XSIZE, m_width);
@@ -604,7 +616,7 @@ void UIPanel::HandleClickBtnMinimize() {
    }
 }
 
-void UIPanel::OnChartEvent(
+void UIPanel::OnRealtimeEvent(
    const int id, const long &lparam, const double &dparam, const string &sparam
 ) {
    if(id == CHARTEVENT_OBJECT_CLICK) {
@@ -653,7 +665,7 @@ void UIPanel::OnChartEvent(
    }
 }
 
-void UIPanel::OnMQLTesterEvent() {
+void UIPanel::OnStrategyTesterEvent() {
    // Xử lý sự kiện trong MQL Tester nếu cần
    bool isBtnMinClicked
       = ObjectGetInteger(m_chartId, GetPanelHeaderBtnMin().objName, OBJPROP_STATE);

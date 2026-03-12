@@ -13,161 +13,171 @@
 
 #include <AutoTrade/UI/UIDefines.mqh>
 
-class UIInputCheckboxListener {
- public:
-   virtual void onChangeValue(bool newValue) = 0;
-};
-
 class UIInputCheckbox {
  private:
-   UIInputCheckboxListener *m_listener;
-   FOnChange                m_callback;
-   void                    *m_context;        // lưu pointer đến object chủ
+   UIListener *m_listener;
+   FOnChange   m_callback;
+   void       *m_parent;     // lưu pointer đến object chủ
 
-   long                     m_chartId;        // ID của chart
-   string                   m_name;           // Tên unique cho control
-   int                      m_x;              // Vị trí X
-   int                      m_y;              // Vị trí Y
-   int                      m_fontSize;       // Kích thước font chữ label
-   bool                     m_value;          // Giá trị hiện tại (true/false)
-   string                   m_labelText;      // Text label (nếu có)
-   int                      m_zOrderBase;
+   long        m_chartId;    // ID của chart
+   string      m_name;       // Tên unique cho control
+   int         m_x;          // Vị trí X
+   int         m_y;          // Vị trí Y
+   int         m_fontSize;   // Kích thước font chữ label
 
-   color                    m_labelTextColor; // Màu label
-   color                    m_normalBoxColor; // Màu dấu check
-   color                    m_checkBoxColor;  // Màu dấu check
+   bool        m_checked;    // Giá trị hiện tại (true/false)
+   string      m_labelText;  // Text label (nếu có)
+   bool        m_isDisabled; // Có đang ở trạng thái disabled không
+   int         m_zOrderBase;
 
-   string                   m_labelName;
-   string                   m_btnBoxName;
+   color       m_clrNormal;
+   color       m_clrDisable;
+   color       m_clrChecked;
+
+   string      m_labelName;
+   string      m_objBtnBoxName;
 
  public:
    UIInputCheckbox() {}
-   ~UIInputCheckbox() { Destroy(); }
+   ~UIInputCheckbox() { DeleteAllObject(); }
 
-   bool GetValue() const { return m_value; }
+   bool GetValue() const { return m_checked; }
 
-   void SetListener(UIInputCheckboxListener *listener) { m_listener = listener; };
+   void SetListener(UIListener *listener) { m_listener = listener; };
    void SetCallback(void *ctx, FOnChange cb) {
       m_callback = cb;
-      m_context  = ctx;
+      m_parent   = ctx;
    }
 
    void Initialize(long chartId, string name) {
-      m_chartId        = chartId;
-      m_name           = name;
+      m_chartId    = chartId;
+      m_name       = name;
 
-      m_fontSize       = 10;
+      m_fontSize   = 10;
 
-      m_labelTextColor = clrWhite;
-      m_normalBoxColor = clrWhite;
-      m_checkBoxColor  = clrLightBlue;
+      m_clrNormal  = clrWhite;
+      m_clrDisable = clrWhite + 0xadadad;
+      m_clrChecked = clrLightBlue;
 
       // Tạo tên object dựa trên tên control để đảm bảo uniqueness
-      m_labelName  = "Obj_" + name + "_Label";
-      m_btnBoxName = "Obj_" + name + "_Box";
+      m_labelName     = "Obj_" + name + "_Label";
+      m_objBtnBoxName = "Obj_" + name + "_Box";
    }
 
    int GetObjectNameList(string &objNameList[]) {
       ArrayResize(objNameList, 2);
       objNameList[0] = m_labelName;
-      objNameList[1] = m_btnBoxName;
+      objNameList[1] = m_objBtnBoxName;
       return 2;
    }
 
-   void SetValue(bool value) { m_value = value; };
-   void SetLabel(string text, color labelTextColor = clrNONE) {
-      m_labelText = text;
-      if(labelTextColor != clrNONE) {
-         m_labelTextColor = labelTextColor;
-      }
-   }
+   void SetValue(bool checked) { m_checked = checked; };
+   void SetLabel(string text) { m_labelText = text; }
+   void SetDisabled(bool isDisabled) { m_isDisabled = isDisabled; }
    void SetFontSize(int fontSize) { m_fontSize = fontSize; }
    void SetZOrderBase(int zOrder) { m_zOrderBase = zOrder; }
 
+   void RefreshColor() {
+      ObjectSetString(m_chartId, m_objBtnBoxName, OBJPROP_TEXT, m_checked ? "þ" : "");
+      if(m_isDisabled) {
+         ObjectSetInteger(m_chartId, m_labelName, OBJPROP_COLOR, m_clrDisable);
+         ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_BGCOLOR, m_clrDisable);
+         ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_COLOR, m_clrDisable);
+         ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_BORDER_COLOR, m_clrDisable);
+      } else if(m_checked) {
+         ObjectSetInteger(m_chartId, m_labelName, OBJPROP_COLOR, m_clrChecked);
+         ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_BGCOLOR, clrNONE);
+         ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_COLOR, m_clrChecked);
+         ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_BORDER_COLOR, m_clrChecked);
+      } else {
+         ObjectSetInteger(m_chartId, m_labelName, OBJPROP_COLOR, m_clrNormal);
+         ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_BGCOLOR, clrNONE);
+         ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_COLOR, m_clrNormal);
+         ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_BORDER_COLOR, m_clrNormal);
+      }
+   }
+
    void UpdateValue(bool value) {
-      if(m_value != value) {
-         m_value = value;
-         if(m_value) {
-            ObjectSetString(m_chartId, m_btnBoxName, OBJPROP_TEXT, "þ");
-            ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_COLOR, m_checkBoxColor);
-            ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_BORDER_COLOR, m_checkBoxColor);
-         } else {
-            ObjectSetString(m_chartId, m_btnBoxName, OBJPROP_TEXT, "");
-            ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_COLOR, m_normalBoxColor);
-            ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_BORDER_COLOR, m_normalBoxColor);
-         }
+      if(m_checked != value) {
+         m_checked = value;
+         RefreshColor();
       }
    };
-   void UpdateLabel(string text, color labelTextColor = clrNONE) {
+   void UpdateLabel(string text) {
       m_labelText = text;
       ObjectSetString(m_chartId, m_labelName, OBJPROP_TEXT, m_labelText);
-
-      if(labelTextColor != clrNONE) {
-         m_labelTextColor = labelTextColor;
-         ObjectSetInteger(m_chartId, m_labelName, OBJPROP_COLOR, m_labelTextColor);
-      }
    }
 
-   void OnChangeValue() {
-      int valueInt = m_value ? 1 : 0;
+   void UpdateDisabled(bool isDisabled) {
+      m_isDisabled = isDisabled;
+      RefreshColor();
+   }
+
+   void EmitValue() {
+      int valueInt = m_checked ? 1 : 0;
       if(m_listener != NULL) {
-         m_listener.onChangeValue(valueInt);
+         m_listener.listen(&this, UI_EVENT_CHANGE_VALUE, m_checked);
       }
       if(m_callback != NULL) {
-         m_callback(m_context, UI_EVENT_CHANGE_VALUE, valueInt);
+         m_callback(m_parent, UI_EVENT_CHANGE_VALUE, valueInt);
       }
    }
 
-   void Destroy() {
+   void DeleteAllObject() {
       ObjectDelete(m_chartId, m_labelName);
-      ObjectDelete(m_chartId, m_btnBoxName);
+      ObjectDelete(m_chartId, m_objBtnBoxName);
    }
 
    void StartDraw(int x, int y, int fontSize = 10);
    void ClickBtnCheckbox();
-   void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam);
-   void OnMQLTesterEvent();
+   void OnRealtimeEvent(
+      const int id, const long &lparam, const double &dparam, const string &sparam
+   );
+   void OnStrategyTesterEvent();
 };
 
 void UIInputCheckbox::StartDraw(int x, int y, int fontSize) {
-   m_x        = x;
-   m_y        = y;
-   m_fontSize = fontSize;
+   m_x           = x;
+   m_y           = y;
+   m_fontSize    = fontSize;
+
+   color clrInit = m_clrNormal;
+   if(m_isDisabled) {
+      clrInit = m_clrDisable;
+   } else if(m_checked) {
+      clrInit = m_clrChecked;
+   }
 
    // Create button
-   ObjectCreate(m_chartId, m_btnBoxName, OBJ_BUTTON, 0, 0, 0);
-   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_XDISTANCE, m_x);
-   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_YDISTANCE, m_y);
-   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_XSIZE, m_fontSize + 4);
-   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_YSIZE, m_fontSize + 4);
+   if(!ObjectCreate(m_chartId, m_objBtnBoxName, OBJ_BUTTON, 0, 0, 0)) {
+      Print("Failed to create button: ", m_objBtnBoxName, " Error: ", GetLastError());
+      return;
+   }
+   ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+   ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_XDISTANCE, m_x);
+   ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_YDISTANCE, m_y);
+   ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_XSIZE, m_fontSize + 4);
+   ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_YSIZE, m_fontSize + 4);
 
-   ObjectSetString(m_chartId, m_btnBoxName, OBJPROP_FONT, "Wingdings");
-   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_FONTSIZE, m_fontSize + 4);
-   ObjectSetString(m_chartId, m_btnBoxName, OBJPROP_TEXT, m_value ? "þ" : "");
-   ObjectSetInteger(
-      m_chartId,
-      m_btnBoxName,
-      OBJPROP_COLOR,
-      m_value ? m_checkBoxColor : m_normalBoxColor
-   );
-   ObjectSetInteger(
-      m_chartId,
-      m_btnBoxName,
-      OBJPROP_BORDER_COLOR,
-      m_value ? m_checkBoxColor : m_normalBoxColor
-   );
-   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_BGCOLOR, clrNONE);
+   ObjectSetString(m_chartId, m_objBtnBoxName, OBJPROP_FONT, "Wingdings");
+   ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_FONTSIZE, m_fontSize + 4);
+   ObjectSetString(m_chartId, m_objBtnBoxName, OBJPROP_TEXT, m_checked ? "þ" : "");
+   ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_COLOR, clrInit);
+   ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_BORDER_COLOR, clrInit);
+   ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_BGCOLOR, clrNONE);
 
-   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_BACK, false);
-   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_STATE, false);
-   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_SELECTABLE, false);
-   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_SELECTED, false);
-   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_HIDDEN, true);
-   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_ZORDER, m_zOrderBase);
+   ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_BACK, false);
+   ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_STATE, false);
+   ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_SELECTABLE, false);
+   ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_SELECTED, false);
+   ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_HIDDEN, true);
+   ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_ZORDER, m_zOrderBase);
 
    // Create label
-   ObjectCreate(m_chartId, m_labelName, OBJ_LABEL, 0, 0, 0);
+   if(!ObjectCreate(m_chartId, m_labelName, OBJ_LABEL, 0, 0, 0)) {
+      Print("Failed to create label: ", m_labelName, " Error: ", GetLastError());
+      return;
+   }
    ObjectSetInteger(m_chartId, m_labelName, OBJPROP_CORNER, CORNER_LEFT_UPPER);
    ObjectSetInteger(m_chartId, m_labelName, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
    ObjectSetInteger(m_chartId, m_labelName, OBJPROP_XDISTANCE, m_x + m_fontSize + 4 + 4);
@@ -175,7 +185,7 @@ void UIInputCheckbox::StartDraw(int x, int y, int fontSize) {
    ObjectSetString(m_chartId, m_labelName, OBJPROP_TEXT, m_labelText);
    ObjectSetString(m_chartId, m_labelName, OBJPROP_FONT, "Arial");
    ObjectSetInteger(m_chartId, m_labelName, OBJPROP_FONTSIZE, m_fontSize);
-   ObjectSetInteger(m_chartId, m_labelName, OBJPROP_COLOR, m_labelTextColor);
+   ObjectSetInteger(m_chartId, m_labelName, OBJPROP_COLOR, clrInit);
    ObjectSetInteger(m_chartId, m_labelName, OBJPROP_BACK, false);
    ObjectSetInteger(m_chartId, m_labelName, OBJPROP_SELECTABLE, false);
    ObjectSetInteger(m_chartId, m_labelName, OBJPROP_SELECTED, false);
@@ -184,23 +194,25 @@ void UIInputCheckbox::StartDraw(int x, int y, int fontSize) {
 }
 
 void UIInputCheckbox::ClickBtnCheckbox() {
-   ObjectSetInteger(m_chartId, m_btnBoxName, OBJPROP_STATE, false);
-   UpdateValue(!m_value);
-   OnChangeValue();
+   ObjectSetInteger(m_chartId, m_objBtnBoxName, OBJPROP_STATE, false);
+   if(!m_isDisabled) {
+      UpdateValue(!m_checked);
+      EmitValue();
+   }
 }
 
-void UIInputCheckbox::OnChartEvent(
+void UIInputCheckbox::OnRealtimeEvent(
    const int id, const long &lparam, const double &dparam, const string &sparam
 ) {
    if(id == CHARTEVENT_OBJECT_CLICK) {
-      if(sparam == m_btnBoxName || sparam == m_labelName) {
+      if(sparam == m_objBtnBoxName || sparam == m_labelName) {
          ClickBtnCheckbox();
       }
    }
 }
 
-void UIInputCheckbox::OnMQLTesterEvent() {
-   if(ObjectGetInteger(m_chartId, m_btnBoxName, OBJPROP_STATE)) {
+void UIInputCheckbox::OnStrategyTesterEvent() {
+   if(ObjectGetInteger(m_chartId, m_objBtnBoxName, OBJPROP_STATE)) {
       ClickBtnCheckbox();
    }
 }
