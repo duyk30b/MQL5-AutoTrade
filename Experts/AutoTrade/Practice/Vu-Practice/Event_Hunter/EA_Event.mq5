@@ -1,0 +1,96 @@
+//+------------------------------------------------------------------+
+//|                         EA_Event.mq5                             |
+//| Trade vào tin tức: BUY khi actual > forecast, SELL ngược lại    |
+//|                                                                  |
+//| Real Chart → MQL5 Economic Calendar (online, tự động)           |
+//| Backtest   → File CSV từ Common\Files\ (offline, đọc 1 lần)     |
+//|                                                                  |
+//| Cách tạo file CSV cho Backtest:                                  |
+//|   Chạy Scripts\DumpNewsCalendar.mq5 trên Real Chart             |
+//|   → Tự tạo Common\Files\news_data.csv                           |
+//|                                                                  |
+//| Điều kiện BUY : actual > forecast + title chứa InpEventTitle    |
+//| Điều kiện SELL: actual < forecast + title chứa InpEventTitle    |
+//| SL = % giá vào | TP = SL × InpRate_TP_SL                       |
+//| Tự đóng lệnh sau InpCloseMinute nếu chưa hit TP/SL              |
+//+------------------------------------------------------------------+
+#property tester_file "news_data.csv"   // Shipper: MT5 tự copy file vào từng Agent khi Optimize
+#property copyright "Event Hunter EA"
+#property version   "1.0"
+#property strict
+
+#include "Model/EE_Constants.mqh"      // inputs + struct EventRecord + globals
+#include "Model/EE_EventModel.mqh"     // CSV loading, currency check, sort, dedup
+#include "Model/EE_TradeExecution.mqh" // OpenTrade, ManagePosition, GetMyPositionTicket
+#include "Model/EE_SignalEngine.mqh"   // ProcessBacktestEvents, ProcessCalendarEvents
+#include "EE_PanelView.mqh"            // UI panel: Next Target / Risk / Filters
+
+//====================================================================  
+// INIT / DEINIT / TICK
+//====================================================================
+int OnInit()
+  {
+   trade.SetExpertMagicNumber(InpMagicNumber);
+   trade.SetDeviationInPoints(InpSlippage);
+
+   // Khởi runtime params từ Inp* (input là read-only, không thể gán lúc chạy)
+   g_LotSize    = InpLotSize;
+   g_SL_Percent = InpSL_Percent;
+   g_Rate_TP_SL = InpRate_TP_SL;
+
+   if(MQLInfoInteger(MQL_TESTER))
+      LoadEventsFromFile();
+
+   if(!MQLInfoInteger(MQL_OPTIMIZATION))
+     {
+      DrawEEPanel();         // Vẽ ngay khi gắn EA, không đợi tick
+      EventSetTimer(1);      // Cập nhật panel mỗi giây ngay cả khi không có tick
+      Print("✓ EA_Event khởi động | Symbol=", _Symbol,
+            "  Event='", InpEventTitle, "'"
+            "  SL=", g_SL_Percent, "%"
+            "  TP=", g_Rate_TP_SL, "×SL"
+            "  CloseAfter=", InpCloseMinute, " phút");
+     }
+
+   return INIT_SUCCEEDED;
+  }
+
+void OnDeinit(const int reason)
+  {
+   EventKillTimer();
+   DeleteEEPanel();
+   ArrayFree(g_events);
+  }
+
+void OnChartEvent(const int id,
+                  const long   &lparam,
+                  const double &dparam,
+                  const string &sparam)
+  {
+   PanelChartEvent(id, sparam);
+  }
+
+void OnTimer()
+  {
+   // Real Chart: cập nhật panel mỗi giây (đếm ngược, spread)
+   if(!MQLInfoInteger(MQL_TESTER))
+      DrawEEPanel();
+  }
+
+void OnTick()
+  {
+   // Backtest: OnChartEvent không hoạt động → poll nút thủ công
+   if(MQLInfoInteger(MQL_TESTER))
+      PanelScanButtons();
+
+   ManagePosition();
+
+   if(MQLInfoInteger(MQL_TESTER))
+      ProcessBacktestEvents();
+   else
+      ProcessCalendarEvents();
+
+   // Panel: hien thi khi Real Chart hoac Tester Visual, bo qua khi Optimize
+   if(!MQLInfoInteger(MQL_OPTIMIZATION))
+      DrawEEPanel();
+  }
