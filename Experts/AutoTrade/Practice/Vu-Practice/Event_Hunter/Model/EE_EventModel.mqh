@@ -15,9 +15,13 @@ bool IsCurrencyRelevant(string cur)
   {
    string base  = SymbolInfoString(_Symbol, SYMBOL_CURRENCY_BASE);
    string quote = SymbolInfoString(_Symbol, SYMBOL_CURRENCY_PROFIT);
-   if(StringLen(base)  < 3) base  = StringSubstr(_Symbol, 0, 3);
-   if(StringLen(quote) < 3) quote = StringSubstr(_Symbol, 3, 3);
-   StringToUpper(cur); StringToUpper(base); StringToUpper(quote);
+   if(StringLen(base)  < 3)
+      base  = StringSubstr(_Symbol, 0, 3);
+   if(StringLen(quote) < 3)
+      quote = StringSubstr(_Symbol, 3, 3);
+   StringToUpper(cur);
+   StringToUpper(base);
+   StringToUpper(quote);
    return (cur == base || cur == quote);
   }
 
@@ -27,8 +31,10 @@ bool IsCurrencyRelevant(string cur)
 double SafeParseDouble(string s)
 // Trả về EMPTY_VALUE nếu không parse được(xóa khoảng trắng, bỏ header, hoặc actual=forecast)
   {
-   StringTrimLeft(s); StringTrimRight(s);
-   if(StringLen(s) == 0) return EMPTY_VALUE;
+   StringTrimLeft(s);
+   StringTrimRight(s);
+   if(StringLen(s) == 0)
+      return EMPTY_VALUE;
    return StringToDouble(s);
   }
 
@@ -59,10 +65,14 @@ void SortEventsByTime()
 bool IsIdProcessed(ulong id)
   {
    for(int i = 0; i < g_processedCount; i++)
-      if(g_processedIds[i] == id) return true;
+      if(g_processedIds[i] == id)
+         return true;
    return false;
   }
 
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 void MarkIdProcessed(ulong id)
   {
    if(g_processedCount >= 200)
@@ -82,7 +92,8 @@ void MarkIdProcessed(ulong id)
 //--------------------------------------------------------------------
 void LoadEventsFromFile()
   {
-   if(g_eventsLoaded) return;
+   if(g_eventsLoaded)
+      return;
    g_eventsLoaded = true;
    ArrayResize(g_events, 0);
    g_nextEventIdx = 0;
@@ -112,18 +123,33 @@ void LoadEventsFromFile()
       string actualS   = FileReadString(handle); // cột 5: actual
       string forecastS = FileReadString(handle); // cột 6: forecast
 
-      if(StringLen(dtStr) < 10) continue;
+      if(StringLen(dtStr) < 10)
+         continue;
       datetime t = StringToTime(dtStr);
-      if(t == 0) continue; // bỏ header
+      if(t == 0)
+         continue; // bỏ header
 
       totalRows++;
-      StringTrimLeft(cur);     StringTrimRight(cur);
-      StringTrimLeft(evTitle); StringTrimRight(evTitle);
-      if(StringLen(firstCurrencySeen) == 0) firstCurrencySeen = cur;
+      StringTrimLeft(cur);
+      StringTrimRight(cur);
+      StringTrimLeft(evTitle);
+      StringTrimRight(evTitle);
+      if(StringLen(firstCurrencySeen) == 0)
+         firstCurrencySeen = cur;
 
-      if(InpFilterByCurrency && !IsCurrencyRelevant(cur)) { skipCurrency++; continue; }
-      if(StringLen(firstTitleSeen) == 0) firstTitleSeen = evTitle;
-      if(StringFind(evTitle, InpEventTitle) < 0) { skipTitle++;    continue; }
+      // Multi-symbol: load tất cả currencies, filter sau khi trade
+      if(InpFilterByCurrency && !inp_multi_symbol && !IsCurrencyRelevant(cur))
+        {
+         skipCurrency++;
+         continue;
+        }
+      if(StringLen(firstTitleSeen) == 0)
+         firstTitleSeen = evTitle;
+      if(evTitle != InpEventTitle)
+        {
+         skipTitle++;
+         continue;
+        }
 
       double actual   = SafeParseDouble(actualS);
       double forecast = SafeParseDouble(forecastS);
@@ -158,4 +184,122 @@ void LoadEventsFromFile()
      }
   }
 
+//--------------------------------------------------------------------
+// Parse symbol array từ inp_symbol_array ("SYM1,SYM2,..." → g_symbols[])
+//--------------------------------------------------------------------
+void ParseSymbolArray()
+  {
+   ArrayResize(g_symbols, 0);
+   g_symbolCount = 0;
+   string src = inp_symbol_array;
+   while(true)
+     {
+      int comma = StringFind(src, ",");
+      string sym = (comma >= 0) ? StringSubstr(src, 0, comma) : src;
+      StringTrimLeft(sym);
+      StringTrimRight(sym);
+      StringToUpper(sym);
+      if(StringLen(sym) > 0)
+        {
+         SymbolSelect(sym, true); // subscribe symbol → SymbolInfo khả dụng trong backtest
+         ArrayResize(g_symbols, g_symbolCount + 1);
+         g_symbols[g_symbolCount++] = sym;
+        }
+      if(comma < 0)
+         break;
+      src = StringSubstr(src, comma + 1);
+     }
+  }
+
+//--------------------------------------------------------------------
+// Kiểm tra currency có liên quan đến một symbol cụ thể (multi-symbol)
+//--------------------------------------------------------------------
+bool IsCurrencyRelevantForSymbol(string cur, string symb)
+  {
+   string base  = SymbolInfoString(symb, SYMBOL_CURRENCY_BASE);
+   string quote = SymbolInfoString(symb, SYMBOL_CURRENCY_PROFIT);
+   if(StringLen(base)  < 3)
+      base  = StringSubstr(symb, 0, 3);
+   if(StringLen(quote) < 3)
+      quote = StringSubstr(symb, 3, 3);
+   StringToUpper(cur);
+   StringToUpper(base);
+   StringToUpper(quote);
+   return (cur == base || cur == quote);
+  }
+
+//--------------------------------------------------------------------
+// Giá trị 1 point theo account currency — dùng lại từ trade-dashboard
+//--------------------------------------------------------------------
+double GetPointValue(string symb)
+  {
+   double tickValue = SymbolInfoDouble(symb, SYMBOL_TRADE_TICK_VALUE);
+   double tickSize  = SymbolInfoDouble(symb, SYMBOL_TRADE_TICK_SIZE);
+   if(tickSize == 0 || tickValue == 0)
+      return 0;
+   return tickValue * (SymbolInfoDouble(symb, SYMBOL_POINT) / tickSize);
+  }
+
+//--------------------------------------------------------------------
+// Chuẩn hóa lot: floor theo step + clamp [min, max]
+//--------------------------------------------------------------------
+double NormalizeLotForSymbol(double lot, string symb)
+  {
+   double step   = SymbolInfoDouble(symb, SYMBOL_VOLUME_STEP);
+   double minLot = SymbolInfoDouble(symb, SYMBOL_VOLUME_MIN);
+   double maxLot = SymbolInfoDouble(symb, SYMBOL_VOLUME_MAX);
+
+   if(step   <= 0) step   = 0.01;
+   if(minLot <= 0) minLot = 0.01;
+   if(maxLot <= 0) maxLot = 100.0;
+
+   lot = MathFloor(lot / step) * step;
+   lot = MathMax(lot, minLot);
+   lot = MathMin(lot, maxLot);
+   return lot;
+  }
+
+//--------------------------------------------------------------------
+// Tính lot theo risk % equity
+// Dùng OrderCalcProfit (MT5 tự quy đổi JPY/CHF) + fallback cross-rate
+//--------------------------------------------------------------------
+double CalcLotByRisk(double entryPrice, string symb)
+  {
+   double riskAmt     = AccountInfoDouble(ACCOUNT_EQUITY) * inp_risk_percent / 100.0;
+   double slDistPrice = entryPrice * g_SL_Percent / 100.0;
+   if(slDistPrice <= 0 || entryPrice <= 0)
+      return g_LotSize;
+
+   // Cách 1: OrderCalcProfit — chuẩn nhất, tự quy đổi mọi currency
+   double lossPerLot = 0;
+   if(OrderCalcProfit(ORDER_TYPE_BUY, symb, 1.0, entryPrice, entryPrice - slDistPrice, lossPerLot))
+     {
+      if(MathAbs(lossPerLot) > 0)
+        {
+         double lot = riskAmt / MathAbs(lossPerLot);
+         return NormalizeLotForSymbol(lot, symb);
+        }
+     }
+
+   // Cách 2: Fallback — tính thủ công qua cross rate
+   double contractSize = SymbolInfoDouble(symb, SYMBOL_TRADE_CONTRACT_SIZE);
+   if(contractSize <= 0) contractSize = 100000;
+   string quoteCur = SymbolInfoString(symb, SYMBOL_CURRENCY_PROFIT);
+   string acctCur  = AccountInfoString(ACCOUNT_CURRENCY);
+   double quoteToAcct = 1.0;
+   if(quoteCur != acctCur)
+     {
+      double rate = SymbolInfoDouble(quoteCur + acctCur, SYMBOL_BID);
+      if(rate > 0) quoteToAcct = rate;
+      else { rate = SymbolInfoDouble(acctCur + quoteCur, SYMBOL_BID); if(rate > 0) quoteToAcct = 1.0 / rate; }
+     }
+   double slValuePerLot = slDistPrice * contractSize * quoteToAcct;
+   if(slValuePerLot <= 0)
+      return g_LotSize;
+
+   double lot = riskAmt / slValuePerLot;
+   return NormalizeLotForSymbol(lot, symb);
+  }
+
 #endif
+//+------------------------------------------------------------------+
