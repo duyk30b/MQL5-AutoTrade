@@ -26,13 +26,14 @@ input string   inp_symbol_array = "EURUSD,GBPUSD,USDJPY,AUDCAD"; // Danh sách s
 input double   inp_risk_percent = 1;    // % risk trên equity nếu hit SL (0 = tắt, dùng inp_lot)
 input double   inp_lot          = 0.01; // Lot cố định khi inp_risk_percent = 0
 
-input string   _inp3            = "=== BẢO VỆ VÀO LỆNH ===";
-input int      InpMaxSpread     = 30;   // Spread tối đa cho phép vào lệnh (points, 0 = không giới hạn)
-input double   InpMaxGapPercent = 20.0; // Bỏ qua nếu giá đã chạy quá X% khoảng TP từ lúc tin ra (0 = không giới hạn)
-
 input string   _inp4            = "=== CÀI ĐẶT ===";
 input int      InpMagicNumber   = 20250315; // Magic number
 input int      InpSlippage      = 10;       // Slippage (points)
+
+input string   _inp5            = "=== MARTINGALE ===";
+input bool     InpMartingale    = false;    // true = bật Martingale sau mỗi lệnh thua
+input double   InpMgMultiplier  = 2.0;     // Hệ số nhân lot sau khi thua (VD: 2.0 = x2)
+input int      InpMgMaxLevel    = 4;        // Số cấp Martingale tối đa (0 = không giới hạn)
 
 //====================================================================
 // STRUCT
@@ -59,8 +60,6 @@ int         g_nextEventIdx   = 0;   // Tối ưu: skip events đã qua khi Backt
 ulong       g_processedIds[200];    // Real chart: track IDs đã xử lý để tránh double-open
 int         g_processedCount = 0;
 
-double      g_lastEventPrice = 0.0; // Giá tại thời điểm tin ra (để kiểm tra Gap)
-
 // Runtime params – chỉnh qua Panel mà không cần mở F7 (Read-only Inp* không gán được lúc runtime)
 double      g_LotSize    = 0.01;
 double      g_SL_Percent = 2.0;
@@ -70,6 +69,58 @@ double      g_Rate_TP_SL = 2.0;
 string      g_symbols[];        // Array symbols đã parse từ inp_symbol_array
 int         g_symbolCount = 0;  // Số lượng symbols
 int         g_symHandles[];     // iMA handles ép tester load tick data cho secondary symbols
+
+// Martingale – tra lịch sử deal trực tiếp khi cần, không tracking state
+// Trả về lot dựa trên kết quả lệnh gần nhất trên symb
+double GetMgLot(double baseLot, string symb)
+  {
+   if(!InpMartingale) return baseLot;
+
+   // Quét lịch sử 90 ngày, tìm deal đóng lệnh gần nhất của EA trên symb
+   HistorySelect(TimeCurrent() - 90 * 86400, TimeCurrent());
+   int total = HistoryDealsTotal();
+   for(int i = total - 1; i >= 0; i--)
+     {
+      ulong deal = HistoryDealGetTicket(i);
+      if(HistoryDealGetInteger(deal, DEAL_MAGIC)  != InpMagicNumber) continue;
+      if(HistoryDealGetString(deal,  DEAL_SYMBOL) != symb)           continue;
+      if(HistoryDealGetInteger(deal, DEAL_ENTRY)  != DEAL_ENTRY_OUT) continue;
+
+      double profit = HistoryDealGetDouble(deal, DEAL_PROFIT)
+                    + HistoryDealGetDouble(deal, DEAL_SWAP);
+      if(profit >= 0) return baseLot;    // Thắng / hòa → reset
+
+      // Thua → gấp đôi lot vừa dùng
+      double lastLot = HistoryDealGetDouble(deal, DEAL_VOLUME);
+      double newLot  = lastLot * InpMgMultiplier;
+      if(InpMgMaxLevel > 0)
+         newLot = MathMin(newLot, baseLot * MathPow(InpMgMultiplier, InpMgMaxLevel));
+      return newLot;
+     }
+   return baseLot;   // Chưa có lịch sử → lot chuẩn
+  }
+
+// Duplicate news filter – chống nhồi lệnh do CSV trùng dữ liệu
+#define DUPNEWS_MAX    10       // Số tin lưu tối đa
+#define DUPNEWS_SECS   60      // Khoảng thời gian chống trùng (giây)
+string      g_dupKeys[DUPNEWS_MAX];
+datetime    g_dupTimes[DUPNEWS_MAX];
+int         g_dupHead = 0;     // circular buffer pointer
+
+bool IsDuplicateNews(string key)
+  {
+   datetime now = TimeCurrent();
+   for(int i = 0; i < DUPNEWS_MAX; i++)
+     {
+      if(g_dupKeys[i] == key && now - g_dupTimes[i] < DUPNEWS_SECS)
+         return true;
+     }
+   // Lưu vào vị trí tiếp theo trong circular buffer
+   g_dupKeys[g_dupHead]  = key;
+   g_dupTimes[g_dupHead] = now;
+   g_dupHead = (g_dupHead + 1) % DUPNEWS_MAX;
+   return false;
+  }
 
 #endif
 //+------------------------------------------------------------------+

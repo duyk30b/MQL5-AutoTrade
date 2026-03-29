@@ -23,12 +23,12 @@
 
 // Section height:
 // Sec1: header(22) + 3 rows(18×3) + gap(8) = 84
-// Sec2: header(22) + 5 rows(18×5) + gap(8) = 120   (Risk%, Lot, SL, TP, Trade Mode)
+// Sec2: header(22) + 6 rows(18×6) + gap(8) = 138   (Risk%, Lot, SL, TP, Trade Mode, Martingale)
 // Sec3: header(22) + 3 rows(18×3) + gap(8) = 84    (+Auto Close row)
 // Sec4 interactive: header(22) + 3 rows×24 + pad(6) = 100
 #define EEP_SECH   84
-#define EEP_SEC2H  120
-#define EEP_SEC3H  84
+#define EEP_SEC2H  138
+#define EEP_SEC3H  46
 #define EEP_SEC4H  100
 
 //====================================================================
@@ -198,6 +198,8 @@ void DrawEEPanel()
   {
    static datetime s_lastDraw = 0;
    datetime now = TimeCurrent();
+   if(MQLInfoInteger(MQL_OPTIMIZATION))
+      return;  // không vẽ panel khi optimize – tiết kiệm tài nguyên
    if(now - s_lastDraw < 1)
       return;
    s_lastDraw = now;
@@ -304,6 +306,21 @@ void DrawEEPanel()
    _EEPLbl("EEP_r6mk", tx,      s2 + 98, "Trade Mode :", EEP_DIM, 8);
    _EEPLbl("EEP_r6mv", tx + 72, s2 + 98, msValue,        msClr,   8);
 
+// Martingale status
+   string mgStr;
+   color  mgClr;
+   if(!InpMartingale)
+     { mgStr = "Off"; mgClr = EEP_DIM; }
+   else
+     {
+      mgStr = "x" + DoubleToString(InpMgMultiplier, 1);
+      if(InpMgMaxLevel > 0)
+         mgStr += "  MaxLot=" + DoubleToString(g_LotSize * MathPow(InpMgMultiplier, InpMgMaxLevel), 2);
+      mgClr = EEP_YELLOW;
+     }
+   _EEPLbl("EEP_mgk", tx,      s2 + 116, "Martingale :", EEP_DIM, 8);
+   _EEPLbl("EEP_mgv", tx + 72, s2 + 116, mgStr,          mgClr,   8);
+
 // ════════════════════════════════════════════════════════════
 // SECTION 3 – FILTERS
 // ════════════════════════════════════════════════════════════
@@ -311,31 +328,12 @@ void DrawEEPanel()
    _EEPRect("EEP_h3", x, s3, w, 22, EEP_HDR3);
    _EEPLbl("EEP_h3t", tx, s3 + 4, "[ FILTERS ]", EEP_WHITE, 9);
 
-// Spread (live, đổi màu)
-   MqlTick tick;
-   SymbolInfoTick(_Symbol, tick);
-   double sp    = (tick.ask - tick.bid) / _Point;
-   bool   spOK  = (InpMaxSpread <= 0 || sp <= InpMaxSpread);
-   string spStr = DoubleToString(sp, 1) + " pts";
-   if(InpMaxSpread > 0)
-      spStr += "  / max " + IntegerToString(InpMaxSpread);
-   spStr += spOK ? "  [OK]" : "  [!]";
-   _EEPLbl("EEP_r7k", tx,      s3 + 26, "Spread    :", EEP_DIM,                8);
-   _EEPLbl("EEP_r7v", tx + 72, s3 + 26, spStr, spOK ? EEP_GREEN : EEP_RED,    8);
-
-// Max Gap
-   string gapStr = (InpMaxGapPercent > 0.0)
-                   ? DoubleToString(InpMaxGapPercent, 1) + "% cua TP"
-                   : "Tat";
-   _EEPLbl("EEP_r8k", tx,      s3 + 44, "Max Gap   :", EEP_DIM,   8);
-   _EEPLbl("EEP_r8v", tx + 72, s3 + 44, gapStr,        EEP_WHITE, 8);
-
 // Auto close (sau bao nhiêu phút)
    string closeStr = (InpCloseMinute > 0)
                      ? IntegerToString(InpCloseMinute) + " phut"
                      : "Tat";
-   _EEPLbl("EEP_r8ck", tx,      s3 + 62, "Auto Close :", EEP_DIM,   8);
-   _EEPLbl("EEP_r8cv", tx + 72, s3 + 62, closeStr,       EEP_WHITE, 8);
+   _EEPLbl("EEP_r8ck", tx,      s3 + 26, "Auto Close :", EEP_DIM,   8);
+   _EEPLbl("EEP_r8cv", tx + 72, s3 + 26, closeStr,       EEP_WHITE, 8);
 
 // ════════════════════════════════════════════════════════════
 // SECTION 4 – ĐIỀU CHỈNH THAM SỐ  [ − ] value [ + ]

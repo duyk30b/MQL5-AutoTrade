@@ -92,6 +92,11 @@ void OnChartEvent(const int id,
   }
 
 //+------------------------------------------------------------------+
+//| Theo dõi lệnh TP/SL hit → cập nhật Martingale                   |
+//+------------------------------------------------------------------+
+
+
+//+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 void OnTimer()
@@ -104,7 +109,7 @@ void OnTimer()
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void OnTick()
+void OnTick() // Chạy mỗi tick – throttle 5 phút/tick nằm trong ProcessBacktestEvents; IsDuplicateNews chống quét trùng sự kiện
   {
    bool isVisual = MQLInfoInteger(MQL_VISUAL_MODE) != 0;
 

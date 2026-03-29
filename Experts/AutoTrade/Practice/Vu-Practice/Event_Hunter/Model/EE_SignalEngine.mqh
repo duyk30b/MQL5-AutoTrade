@@ -15,8 +15,13 @@
 //--------------------------------------------------------------------
 void ProcessBacktestEvents()
   {
+   static datetime lastScan = 0;
    datetime now   = TimeCurrent();
-   int      total = ArraySize(g_events);
+   if(now - lastScan < 300) // quét 5 phút/lần, tránh quét lại events cũ nhiều lần trong 1 phút
+      return;
+   lastScan = now;
+   Print("⏰ Đã đủ 5 phút! Bắt đầu quét tin tức lúc: ", TimeToString(now));
+   int total = ArraySize(g_events);
 
    for(int i = g_nextEventIdx; i < total; i++)
      {
@@ -32,19 +37,23 @@ void ProcessBacktestEvents()
                          + "  A=" + DoubleToString(g_events[i].actual,   2)
                          + "  F=" + DoubleToString(g_events[i].forecast, 2);
 
+         // Chống trùng lệnh: bỏ qua nếu cùng tin + cùng hướng trong vòng 60 giây
+         string dupKey = g_events[i].currency + g_events[i].title
+                         + DoubleToString(g_events[i].actual, 4)
+                         + DoubleToString(g_events[i].forecast, 4);
+         if(IsDuplicateNews(dupKey))
+           {
+            g_nextEventIdx = i + 1;
+            continue;
+           }
+
          if(inp_multi_symbol && g_symbolCount > 0)
            {
-            // Multi-symbol: trade trên từng symbol trong danh sách
             for(int s = 0; s < g_symbolCount; s++)
               {
                string symb = g_symbols[s];
                if(InpFilterByCurrency && !IsCurrencyRelevantForSymbol(g_events[i].currency, symb))
                   continue;
-               if(GetMyPositionTicket(symb) != 0)
-                  continue;
-               MqlTick refTick;
-               if(SymbolInfoTick(symb, refTick))
-                  g_lastEventPrice = (dir > 0) ? refTick.ask : refTick.bid;
                OpenTrade(dir, reason, symb);
               }
            }
@@ -52,15 +61,7 @@ void ProcessBacktestEvents()
            {
             // Single symbol: chạy trên chart hiện tại
             if(!InpFilterByCurrency || IsCurrencyRelevant(g_events[i].currency))
-              {
-               if(GetMyPositionTicket() == 0)
-                 {
-                  MqlTick refTick;
-                  if(SymbolInfoTick(_Symbol, refTick))
-                     g_lastEventPrice = (dir > 0) ? refTick.ask : refTick.bid;
-                  OpenTrade(dir, reason);
-                 }
-              }
+               OpenTrade(dir, reason);
            }
         }
       g_nextEventIdx = i + 1; // Không cần quét lại events này ở tick tiếp theo
@@ -114,19 +115,20 @@ void ProcessCalendarEvents()
                         + "  A=" + DoubleToString(actual, (int)ev.digits)
                         + "  F=" + DoubleToString(forecast, (int)ev.digits);
 
+      // Chống trùng lệnh: bỏ qua nếu cùng tin + cùng hướng trong vòng 60 giây
+      string dupKey = ct.currency + ev.name
+                      + DoubleToString(actual, (int)ev.digits)
+                      + DoubleToString(forecast, (int)ev.digits);
+      if(IsDuplicateNews(dupKey))
+         continue;
+
       if(inp_multi_symbol && g_symbolCount > 0)
         {
-         // Multi-symbol: trade trên từng symbol trong danh sách
          for(int s = 0; s < g_symbolCount; s++)
            {
             string symb = g_symbols[s];
             if(InpFilterByCurrency && !IsCurrencyRelevantForSymbol(ct.currency, symb))
                continue;
-            if(GetMyPositionTicket(symb) != 0)
-               continue;
-            MqlTick refTick;
-            if(SymbolInfoTick(symb, refTick))
-               g_lastEventPrice = (dir > 0) ? refTick.ask : refTick.bid;
             OpenTrade(dir, reason, symb);
            }
         }
@@ -135,11 +137,6 @@ void ProcessCalendarEvents()
          // Single symbol: chạy trên chart hiện tại
          if(InpFilterByCurrency && !IsCurrencyRelevant(ct.currency))
             continue;
-         if(GetMyPositionTicket() != 0)
-            continue;
-         MqlTick refTick;
-         if(SymbolInfoTick(_Symbol, refTick))
-            g_lastEventPrice = (dir > 0) ? refTick.ask : refTick.bid;
          OpenTrade(dir, reason);
         }
      }
