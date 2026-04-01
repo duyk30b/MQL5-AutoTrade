@@ -16,11 +16,9 @@
 void ProcessBacktestEvents()
   {
    static datetime lastScan = 0;
-   datetime now   = TimeCurrent();
-   if(now - lastScan < 300) // quét 5 phút/lần, tránh quét lại events cũ nhiều lần trong 1 phút
-      return;
+   datetime now = TimeCurrent();
+   if(now - lastScan < 300) return; // kiểm tra 5 phút / lần
    lastScan = now;
-   Print("⏰ Đã đủ 5 phút! Bắt đầu quét tin tức lúc: ", TimeToString(now));
    int total = ArraySize(g_events);
 
    for(int i = g_nextEventIdx; i < total; i++)

@@ -71,12 +71,12 @@ int         g_symbolCount = 0;  // Số lượng symbols
 int         g_symHandles[];     // iMA handles ép tester load tick data cho secondary symbols
 
 // Martingale – tra lịch sử deal trực tiếp khi cần, không tracking state
-// Trả về lot dựa trên kết quả lệnh gần nhất trên symb
+// Lệnh trước (BUY hoặc SELL) lỗ → lệnh tiếp theo trên cùng symbol gấp đôi
 double GetMgLot(double baseLot, string symb)
   {
    if(!InpMartingale) return baseLot;
 
-   // Quét lịch sử 90 ngày, tìm deal đóng lệnh gần nhất của EA trên symb
+   // Quét lịch sử 90 ngày, tìm deal đóng gần nhất của EA trên symb (bất kỳ chiều)
    HistorySelect(TimeCurrent() - 90 * 86400, TimeCurrent());
    int total = HistoryDealsTotal();
    for(int i = total - 1; i >= 0; i--)

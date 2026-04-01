@@ -10,6 +10,7 @@
 // Forward declaration – định nghĩa thực ở EE_EventModel.mqh (include sau)
 double CalcLotByRisk(double entryPrice, string symb);
 double NormalizeLotForSymbol(double lot, string symb);
+double GetMgLot(double baseLot, string symb);
 
 //--------------------------------------------------------------------
 // Tìm vị thế đang mở của EA (theo magic + symbol)

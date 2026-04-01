@@ -169,6 +169,17 @@ void LoadEventsFromFile()
 
    SortEventsByTime();
 
+   // Backtest: bỏ qua tất cả sự kiện trước thời điểm EA khởi động
+   // Tránh xử lý hàng trăm sự kiện lịch sử ngay lần quét đầu tiên
+   datetime startNow = TimeCurrent();
+   for(int j = 0; j < count; j++)
+     {
+      if(g_events[j].event_time >= startNow)
+         break;
+      g_events[j].processed = true;
+      g_nextEventIdx = j + 1;
+     }
+
    if(!MQLInfoInteger(MQL_OPTIMIZATION))
      {
       Print("✓ EA_Event: Load ", count, " sự kiện '", InpEventTitle,
