@@ -70,34 +70,47 @@ string      g_symbols[];        // Array symbols đã parse từ inp_symbol_arra
 int         g_symbolCount = 0;  // Số lượng symbols
 int         g_symHandles[];     // iMA handles ép tester load tick data cho secondary symbols
 
-// Martingale – tra lịch sử deal trực tiếp khi cần, không tracking state
-// Lệnh trước (BUY hoặc SELL) lỗ → lệnh tiếp theo trên cùng symbol gấp đôi
+// Martingale – tracking in-memory per symbol, O(1), không cần HistorySelect
+#define MG_SYM_MAX 8
+string   g_mgSymbols[MG_SYM_MAX];
+double   g_mgNextLot[MG_SYM_MAX]; // 0 = dùng baseLot
+int      g_mgCount = 0;
+
+// Gọi từ OnTradeTransaction khi lệnh đóng (TP/SL hit hoặc timeout)
+void MgOnClose(string symb, double lotUsed, double profit)
+  {
+   if(!InpMartingale) return;
+   // Tìm hoặc tạo slot
+   int idx = -1;
+   for(int i = 0; i < g_mgCount; i++)
+      if(g_mgSymbols[i] == symb) { idx = i; break; }
+   if(idx < 0)
+     {
+      if(g_mgCount >= MG_SYM_MAX) return;
+      idx = g_mgCount++;
+      g_mgSymbols[idx] = symb;
+      g_mgNextLot[idx] = 0;
+     }
+   if(profit >= 0)
+      g_mgNextLot[idx] = 0;   // Thắng/hòa → reset
+   else
+      g_mgNextLot[idx] = lotUsed * InpMgMultiplier;  // Thua → lưu lot × multiplier
+  }
+
+// Trả về lot tiếp theo: O(1), không HistorySelect
 double GetMgLot(double baseLot, string symb)
   {
    if(!InpMartingale) return baseLot;
-
-   // Quét lịch sử 90 ngày, tìm deal đóng gần nhất của EA trên symb (bất kỳ chiều)
-   HistorySelect(TimeCurrent() - 90 * 86400, TimeCurrent());
-   int total = HistoryDealsTotal();
-   for(int i = total - 1; i >= 0; i--)
-     {
-      ulong deal = HistoryDealGetTicket(i);
-      if(HistoryDealGetInteger(deal, DEAL_MAGIC)  != InpMagicNumber) continue;
-      if(HistoryDealGetString(deal,  DEAL_SYMBOL) != symb)           continue;
-      if(HistoryDealGetInteger(deal, DEAL_ENTRY)  != DEAL_ENTRY_OUT) continue;
-
-      double profit = HistoryDealGetDouble(deal, DEAL_PROFIT)
-                    + HistoryDealGetDouble(deal, DEAL_SWAP);
-      if(profit >= 0) return baseLot;    // Thắng / hòa → reset
-
-      // Thua → gấp đôi lot vừa dùng
-      double lastLot = HistoryDealGetDouble(deal, DEAL_VOLUME);
-      double newLot  = lastLot * InpMgMultiplier;
-      if(InpMgMaxLevel > 0)
-         newLot = MathMin(newLot, baseLot * MathPow(InpMgMultiplier, InpMgMaxLevel));
-      return newLot;
-     }
-   return baseLot;   // Chưa có lịch sử → lot chuẩn
+   for(int i = 0; i < g_mgCount; i++)
+      if(g_mgSymbols[i] == symb && g_mgNextLot[i] > 0)
+        {
+         double lot = g_mgNextLot[i];
+         // Cap tối đa: baseLot × multiplier^maxLevel (dùng baseLot thực tế, không dùng g_LotSize)
+         if(InpMgMaxLevel > 0)
+            lot = MathMin(lot, baseLot * MathPow(InpMgMultiplier, InpMgMaxLevel));
+         return lot;
+        }
+   return baseLot;
   }
 
 // Duplicate news filter – chống nhồi lệnh do CSV trùng dữ liệu

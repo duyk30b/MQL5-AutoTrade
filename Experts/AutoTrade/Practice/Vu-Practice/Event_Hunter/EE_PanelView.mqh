@@ -314,9 +314,21 @@ void DrawEEPanel()
    else
      {
       mgStr = "x" + DoubleToString(InpMgMultiplier, 1);
-      if(InpMgMaxLevel > 0)
-         mgStr += "  MaxLot=" + DoubleToString(g_LotSize * MathPow(InpMgMultiplier, InpMgMaxLevel), 2);
-      mgClr = EEP_YELLOW;
+      // Hiển thị lot tiếp theo cho từng symbol đang trong chuỗi thua
+      bool   anyActive = false;
+      if(inp_multi_symbol && g_symbolCount > 0)
+        {
+         for(int si = 0; si < g_symbolCount; si++)
+           {
+            // Đọc trực tiếp g_mgNextLot để hiển thị, không qua GetMgLot (tránh cap sai với risk%)
+            for(int mi = 0; mi < g_mgCount; mi++)
+              {
+               if(g_mgSymbols[mi] == g_symbols[si] && g_mgNextLot[mi] > 0)
+                 { mgStr += "  " + g_symbols[si] + ":" + DoubleToString(g_mgNextLot[mi], 2); anyActive = true; break; }
+              }
+           }
+        }
+      mgClr = anyActive ? EEP_RED : EEP_YELLOW;
      }
    _EEPLbl("EEP_mgk", tx,      s2 + 116, "Martingale :", EEP_DIM, 8);
    _EEPLbl("EEP_mgv", tx + 72, s2 + 116, mgStr,          mgClr,   8);

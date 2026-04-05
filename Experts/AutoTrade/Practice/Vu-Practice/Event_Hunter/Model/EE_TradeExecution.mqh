@@ -10,7 +10,6 @@
 // Forward declaration – định nghĩa thực ở EE_EventModel.mqh (include sau)
 double CalcLotByRisk(double entryPrice, string symb);
 double NormalizeLotForSymbol(double lot, string symb);
-double GetMgLot(double baseLot, string symb);
 
 //--------------------------------------------------------------------
 // Tìm vị thế đang mở của EA (theo magic + symbol)
@@ -127,6 +126,7 @@ void ManagePosition(string symb = "")
       if(TimeCurrent() - openTime >= limitTime)
         {
          double profit = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+         double volume = PositionGetDouble(POSITION_VOLUME);
          trade.PositionClose(ticket);
          if(!MQLInfoInteger(MQL_OPTIMIZATION))
             Print("⏰ EA_Event: Đóng #", ticket, " sau ", InpCloseMinute, " phút (profit=",

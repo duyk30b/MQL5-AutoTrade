@@ -94,7 +94,23 @@ void OnChartEvent(const int id,
 //+------------------------------------------------------------------+
 //| Theo dõi lệnh TP/SL hit → cập nhật Martingale                   |
 //+------------------------------------------------------------------+
+void OnTradeTransaction(const MqlTradeTransaction &trans,
+                        const MqlTradeRequest     &request,
+                        const MqlTradeResult      &result)
+  {
+   if(!InpMartingale) return;
+   if(trans.type != TRADE_TRANSACTION_DEAL_ADD) return;
 
+   ulong deal = trans.deal;
+   if(!HistoryDealSelect(deal)) return;
+   if(HistoryDealGetInteger(deal, DEAL_MAGIC)  != InpMagicNumber) return;
+   if(HistoryDealGetInteger(deal, DEAL_ENTRY)  != DEAL_ENTRY_OUT) return;
+
+   string symb   = HistoryDealGetString(deal, DEAL_SYMBOL);
+   double profit = HistoryDealGetDouble(deal, DEAL_PROFIT) + HistoryDealGetDouble(deal, DEAL_SWAP);
+   double volume = HistoryDealGetDouble(deal, DEAL_VOLUME);
+   MgOnClose(symb, volume, profit);
+  }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
