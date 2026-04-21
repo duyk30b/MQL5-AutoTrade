@@ -1,0 +1,179 @@
+===========================================================
+  HƯỚNG DẪN SỬ DỤNG TOOL OPTIMIZE MT5
+===========================================================
+
+--- CÁC FILE CHÍNH ---
+
+  gen_input_ini.py
+    Tự động đọc file EA (.mq5) và sinh ra file input.ini
+    dùng cho auto_optimize_multisymbol.py.
+
+  auto_optimize_multisymbol.py
+    Chạy optimize MT5 theo từng symbol/period dựa trên input.ini.
+    Hỗ trợ nhiều MT5 terminal chạy song song.
+
+  input.ini
+    File cấu hình chính. Gồm 4 section:
+      [Symbols]       - danh sách symbol, suffix
+      [Tester]        - cấu hình backtest (model, deposit, date...)
+      [MT5]           - hash terminal + đường dẫn terminal64.exe
+      [TesterInputs]  - các tham số input của EA
+
+
+===========================================================
+  CÁCH DÙNG gen_input_ini.py
+===========================================================
+
+  Bước 1: Mở PowerShell, vào thư mục py:
+    cd "...\Vu-Practice\py"
+
+  Bước 2: Chạy script với đường dẫn file EA:
+
+    -- EA nằm trong thư mục py --
+    python gen_input_ini.py TenEA.mq5
+
+    -- EA nằm ở thư mục khác (dùng đường dẫn tương đối) --
+    python gen_input_ini.py "..\TenEA.mq5"
+
+    -- EA nằm bất kỳ đâu (dùng đường dẫn đầy đủ) --
+    python gen_input_ini.py "C:\...\TenEA.mq5"
+
+    -- Chỉ định luôn file output --
+    python gen_input_ini.py "TenEA.mq5" "C:\...\input.ini"
+
+  Bước 3: Script hỏi chọn MT5 terminal → nhập số → tự sinh input.ini
+
+  Bước 4: Mở input.ini, chỉnh lại:
+    - symbols, period, fromdate, todate
+    - Các param muốn optimize: đổi N → Y, điền start||step||stop
+
+
+===========================================================
+  CÁCH DÙNG auto_optimize_multisymbol.py
+===========================================================
+
+  Chắc chắn input.ini đã đúng, rồi chạy:
+    python auto_optimize_multisymbol.py
+
+  Script sẽ hỏi:
+    1. Xác nhận nội dung input.ini
+    2. Có xóa state.txt và reports cũ không
+
+  Script tự động thực hiện các bước sau (không cần làm thêm gì):
+    1. Đọc input.ini → hiển thị → hỏi xác nhận
+    2. Inject equity code vào EA → tạo file EA_EBR.mq5
+    3. Compile EA_EBR.mq5 → tạo EA_EBR.ex5
+    4. Hỏi có xóa state.txt + reports cũ không
+    5. Tạo queue (symbol × period) → lưu vào state.txt
+    6. Loop từng job: chạy MT5 → copy output → convert XLSX
+    7. In tổng kết khi xong
+
+  Lưu ý về inject:
+    - EA gốc KHÔNG bị sửa, script tạo file mới tên EA_EBR.mq5
+    - Nếu EA_EBR.mq5 đã tồn tại → bỏ qua bước inject (resume an toàn)
+    - EA cần có OnInit() và OnTick() hoặc OnBar() để inject hoạt động
+
+  Output sau khi chạy xong:
+    reports\
+      agents\
+        EURUSD_H1\   ← equity_day.csv + report.txt
+        GBPUSD_H1\
+        ...
+      opt_EURUSD_H1_..._EBR.xlsx
+      opt_GBPUSD_H1_..._EBR.xlsx
+
+
+===========================================================
+  ĐỊNH DẠNG [TesterInputs]
+===========================================================
+
+  ParamName=value||value||step||stop||N     <- cố định (không optimize)
+  ParamName=start||start||step||stop||Y     <- optimize
+
+  Ví dụ:
+    StopLoss=50||50||1||50||N               <- cố định 50
+    TakeProfit=100||50||10||200||Y          <- optimize từ 50 đến 200, bước 10
+
+
+===========================================================
+  CÁC LỖI THƯỜNG GẶP
+===========================================================
+
+  [Lỗi 1] can't open file '...\gen_input_ini.py': No such file or directory
+  Nguyên nhân: Bạn đang đứng sai thư mục khi chạy, Python không tìm thấy script.
+  Cách sửa:
+    - Dùng đường dẫn đầy đủ đến script:
+      python "C:\...\py\gen_input_ini.py" "TenEA.mq5"
+    - HOẶC cd vào thư mục py trước rồi mới chạy.
+
+  [Lỗi 2] Không tìm thấy tham số input nào trong EA
+  Nguyên nhân: EA không có khai báo "input <type> <name> = <value>;"
+               hoặc file .mq5 không đúng.
+  Cách sửa: Kiểm tra lại đường dẫn file EA, đảm bảo là file .mq5.
+
+  [Lỗi 3] Không tìm thấy file: ...
+  Nguyên nhân: Đường dẫn EA truyền vào không tồn tại.
+  Cách sửa: Kiểm tra lại tên file và đường dẫn (chú ý khoảng trắng trong tên).
+            Nếu tên có khoảng trắng, phải bọc trong dấu nháy kép:
+              python gen_input_ini.py "Moving Average.mq5"
+
+  [Lỗi 4] Không tìm thấy mt5_tester_path / mt5_folder_path
+  Nguyên nhân: Hash terminal trong input.ini sai hoặc terminal chưa chạy lần nào.
+  Cách sửa: Kiểm tra lại [MT5] terminal_hash trong input.ini.
+            Hash đúng là tên thư mục trong:
+              %APPDATA%\MetaQuotes\Terminal\
+
+  [Lỗi 5] Không thấy XML report sau khi chạy optimize
+  Nguyên nhân: MT5 không hoàn thành optimize (thiếu data, sai symbol, bị crash...).
+  Cách sửa:
+    - Chạy thủ công trong MT5 Strategy Tester để kiểm tra.
+    - Kiểm tra symbol + suffix có đúng không.
+    - Tool sẽ dừng lại, sửa xong có thể tiếp tục nhờ state.txt.
+
+  [Lỗi 6] input.ini bị ghi đè mất cấu hình cũ
+  Nguyên nhân: Chạy gen_input_ini.py khi input.ini đã có nội dung.
+  Cách sửa: Hiện tại không có backup tự động.
+            Hãy copy input.ini ra nơi khác trước khi chạy lại script.
+
+  [Lỗi 7] [Inject] Compile FAIL — không tìm thấy .ex5
+  Nguyên nhân: MetaEditor compile EA_EBR.mq5 bị lỗi cú pháp.
+  Cách sửa:
+    - Mở file EA_EBR.mq5 trong MetaEditor → xem dòng lỗi.
+    - Thường do EA gốc có cú pháp đặc biệt làm inject sai vị trí.
+    - Xóa file EA_EBR.mq5 → báo lỗi cho người hỗ trợ.
+
+  [Lỗi 8] [Inject] Không tìm thấy metaeditor64.exe
+  Nguyên nhân: mt5_program_path trong input.ini sai, hoặc MetaTrader chưa cài.
+  Cách sửa:
+    - Kiểm tra [MT5] mt5_program_path trỏ đúng đến terminal64.exe.
+    - metaeditor64.exe phải nằm cùng thư mục với terminal64.exe.
+    - Ví dụ: C:\Program Files\MetaTrader 5\terminal64.exe
+
+  [Lỗi 9] [Inject] EA không có OnTick hoặc OnBar — inject bỏ qua
+  Nguyên nhân: EA không phải dạng event-driven thông thường.
+  Hậu quả: Equity không được ghi theo ngày, report.txt sẽ trống.
+  Cách sửa: EA phải có hàm OnTick() hoặc OnBar() để inject hoạt động.
+
+  [Lỗi 10] Ghi file EA_EBR.mq5 thất bại (PermissionError / file bị lock)
+  Nguyên nhân: File EA đang được mở trong MetaEditor.
+  Cách sửa: Đóng file EA trong MetaEditor trước khi chạy script.
+
+  [Lỗi 11] Không có file equity_day.csv hoặc report.txt trong agents\
+  Nguyên nhân 1: Inject không thành công (xem Lỗi 7, 9).
+  Nguyên nhân 2: MT5 không chạy đủ optimize pass (0 kết quả).
+  Nguyên nhân 3: EA_EBR.ex5 cũ từ lần trước, inject mới chưa được compile lại.
+  Cách sửa: Xóa EA_EBR.mq5 + EA_EBR.ex5 → chạy lại để inject + compile mới.
+
+
+===========================================================
+  CƠ CHẾ RESUME (tiếp tục khi bị gián đoạn)
+===========================================================
+
+  auto_optimize_multisymbol.py lưu trạng thái vào state.txt.
+  Nếu tool bị tắt giữa chừng, chạy lại sẽ tự động tiếp tục
+  các job còn lại (không chạy lại từ đầu).
+
+  Muốn chạy lại từ đầu: xóa state.txt (tool sẽ hỏi khi khởi động).
+
+
+===========================================================
