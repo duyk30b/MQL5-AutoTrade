@@ -323,7 +323,7 @@ def inject_ea(mq5_path: Path, magic: int) -> bool:
     else:
         source = source.rstrip() + f'\ndouble OnTester()\n  {{\n   return _er_OnTester({prefix}{ms});\n  }}\n'
 
-    out_path = mq5_path.parent / (mq5_path.stem + '_EBR.mq5')
+    out_path = mq5_path.parent / (mq5_path.stem + '_XYZ.mq5')
     out_path.write_text(source, encoding='utf-8')
     return True
 
@@ -344,7 +344,10 @@ def compile_mq5(metaeditor_path: str, mq5_path: Path) -> bool:
             ex5_path.unlink()
         except Exception:
             pass
-    subprocess.call([metaeditor_path, f'/compile:{mq5_path}', '/log'])
+    # Dùng shell=True với inner quotes để xử lý tên file có khoảng trắng
+    # (MetaEditor parse argument /compile:path nội bộ và split tại space nếu không có quotes)
+    cmd = f'"{metaeditor_path}" /compile:"{mq5_path}" /log'
+    subprocess.call(cmd, shell=True)
     # MetaEditor có thể spawn process con — chờ tối đa 30s cho .ex5 xuất hiện
     for _ in range(30):
         if ex5_path.exists():
@@ -381,12 +384,12 @@ def maybe_inject_and_compile(input_cfg, mt5_folder_path: Path, mt5_program_path:
     """
     expert_val = input_cfg.get('Tester', 'expert')
 
-    # Đã là _EBR rồi → bỏ qua inject
+    # Đã là _XYZ rồi → bỏ qua inject
     expert_base = expert_val
     if expert_base.lower().endswith('.ex5') or expert_base.lower().endswith('.mq5'):
         expert_base = expert_base[:-4]
-    if expert_base.endswith('_EBR'):
-        log(f'[Inject] Expert đã là _EBR: {expert_val}')
+    if expert_base.endswith('_XYZ'):
+        log(f'[Inject] Expert đã là _XYZ: {expert_val}')
         return True
 
     # Tìm file .mq5 — strip .ex5 nếu user để nguyên đuôi trong input.ini
@@ -408,7 +411,7 @@ def maybe_inject_and_compile(input_cfg, mt5_folder_path: Path, mt5_program_path:
             log(f'[Inject] Kiểm tra lại expert= trong input.ini (đường dẫn tương đối từ MQL5\\)')
             return False
 
-    ebr_path = mq5_path.parent / (mq5_path.stem + '_EBR.mq5')
+    ebr_path = mq5_path.parent / (mq5_path.stem + '_XYZ.mq5')
     ex5_path = ebr_path.with_suffix('.ex5')
 
     magic = get_inject_magic(input_cfg)
@@ -458,11 +461,11 @@ def maybe_inject_and_compile(input_cfg, mt5_folder_path: Path, mt5_program_path:
             return False
 
     # Cập nhật Expert trong memory → dùng cho tất cả jobs
-    # Chèn _EBR trước .ex5 (hoặc thêm vào cuối nếu không có đuôi)
+    # Chèn _XYZ trước .ex5 (hoặc thêm vào cuối nếu không có đuôi)
     if expert_val.lower().endswith('.ex5'):
-        new_expert = expert_val[:-4] + '_EBR.ex5'
+        new_expert = expert_val[:-4] + '_XYZ.ex5'
     else:
-        new_expert = expert_val + '_EBR'
+        new_expert = expert_val + '_XYZ'
     input_cfg.set('Tester', 'expert', new_expert)
     log(f'[Inject] Expert cập nhật: {new_expert}')
     return True

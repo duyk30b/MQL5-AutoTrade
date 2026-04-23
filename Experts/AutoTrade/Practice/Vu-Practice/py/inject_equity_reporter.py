@@ -11,7 +11,7 @@
 #   python inject_equity_reporter.py MyEA.mq5 99999
 #
 # Output:
-#   <thư mục EA>\<TênEA>_EBR.mq5  — compile bằng MetaEditor là xong
+#   <thư mục EA>\<TênEA>_XYZ.mq5  — compile bằng MetaEditor là xong
 #
 # File output mỗi optimization pass (trong MQL5\Files\):
 #   <Symbol>_<TF>_equity_day.csv   — equity theo ngày
@@ -317,10 +317,10 @@ def inject_ea(mq5_path: Path, magic: int) -> bool:
     # Dùng all() — nếu chỉ có 1 phần → vẫn inject _er_* (namespace riêng, không đụng tên gốc)
     BUILTIN_MARKERS = ['CalculateCustomSharpe', 'WriteEquityDayFile', 'WriteStatsReportFile', 'SaveDailyEquity']
     if all(m in source for m in BUILTIN_MARKERS):
-        out_path = mq5_path.parent / (mq5_path.stem + '_EBR.mq5')
+        out_path = mq5_path.parent / (mq5_path.stem + '_XYZ.mq5')
         out_path.write_text(source, encoding='utf-8')
         print(f'\n[INFO] {mq5_path.name} đã có equity reporter sẵn — copy as-is → {out_path.name}')
-        print('       Bước tiếp: mở MetaEditor → compile file _EBR.mq5')
+        print('       Bước tiếp: mở MetaEditor → compile file _XYZ.mq5')
         return True
 
     print(f'\n--- Injecting vào: {mq5_path.name} ---')
@@ -364,10 +364,10 @@ def inject_ea(mq5_path: Path, magic: int) -> bool:
         source = source.rstrip() + '\n' + make_new_ontester(magic)
         print('[ok]  Tạo mới OnTester()')
 
-    out_path = mq5_path.parent / (mq5_path.stem + '_EBR.mq5')
+    out_path = mq5_path.parent / (mq5_path.stem + '_XYZ.mq5')
     out_path.write_text(source, encoding='utf-8')
     print(f'\n[DONE] Đã ghi: {out_path}')
-    print('       Bước tiếp: mở MetaEditor → compile file _EBR.mq5')
+    print('       Bước tiếp: mở MetaEditor → compile file _XYZ.mq5')
     return True
 
 
@@ -384,7 +384,7 @@ def main():
         print('  python inject_equity_reporter.py "Moving Average.mq5" 1234501')
         print('  python inject_equity_reporter.py MyEA.mq5 99999')
         print()
-        print('Output: <TênEA>_EBR.mq5  (file gốc không bị thay đổi)')
+        print('Output: <TênEA>_XYZ.mq5  (file gốc không bị thay đổi)')
         sys.exit(1)
 
     mq5_arg = sys.argv[1]
