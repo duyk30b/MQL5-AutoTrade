@@ -14,6 +14,7 @@ import sys
 import threading
 import queue
 from pathlib import Path
+from datetime import datetime
 
 symbol_startyear = {
     "AUDCAD": "2007",
@@ -202,33 +203,41 @@ void _er_WriteStatsReport(const string fp, const double sharpe, int magic)
 {
    int fh = FileOpen(fp + "_report.txt", FILE_WRITE|FILE_TXT);
    if(fh == INVALID_HANDLE) return;
-   double profit    = TesterStatistics(STAT_PROFIT);
-   double eq_dd     = TesterStatistics(STAT_EQUITY_DD);
+   
    double pct_trade = (_er_total_hour_bt > 0) ? (100.0*_er_hour_in_trade/_er_total_hour_bt) : 0.0;
    double pct_loss  = (_er_hour_in_trade > 0) ? (100.0*_er_hour_in_loss/_er_hour_in_trade)  : 0.0;
+   double profit    = TesterStatistics(STAT_PROFIT);
+   double eq_dd     = TesterStatistics(STAT_EQUITY_DD);
+   
    FileWrite(fh, "symbol="                + _Symbol);
    FileWrite(fh, "timeframe="             + _er_TFToText((ENUM_TIMEFRAMES)_Period));
-   FileWrite(fh, "profit="                + DoubleToString(profit, 2));
+   //--- INJECT_INPUTS_HERE ---
    FileWrite(fh, "custom_sharpe="         + DoubleToString(sharpe, 6));
-   FileWrite(fh, "mt5_sharpe="            + DoubleToString(TesterStatistics(STAT_SHARPE_RATIO), 6));
-   FileWrite(fh, "equity_dd="             + DoubleToString(eq_dd, 2));
-   FileWrite(fh, "equity_dd_percent="     + DoubleToString(TesterStatistics(STAT_EQUITYDD_PERCENT), 2));
-   FileWrite(fh, "equity_dd_relative="    + DoubleToString(TesterStatistics(STAT_EQUITY_DD_RELATIVE), 2));
-   FileWrite(fh, "reward_risk="           + DoubleToString((eq_dd!=0.0)?(profit/eq_dd):0.0, 6));
-   FileWrite(fh, "total_trades="          + DoubleToString(TesterStatistics(STAT_TRADES), 0));
-   FileWrite(fh, "profit_trades="         + DoubleToString(TesterStatistics(STAT_PROFIT_TRADES), 0));
-   FileWrite(fh, "loss_trades="           + DoubleToString(TesterStatistics(STAT_LOSS_TRADES), 0));
-   FileWrite(fh, "expected_payoff="       + DoubleToString(TesterStatistics(STAT_EXPECTED_PAYOFF), 2));
-   FileWrite(fh, "recovery_factor="       + DoubleToString(TesterStatistics(STAT_RECOVERY_FACTOR), 6));
-   FileWrite(fh, "min_marginlevel="       + DoubleToString(TesterStatistics(STAT_MIN_MARGINLEVEL), 2));
-   FileWrite(fh, "total_deals="           + DoubleToString(TesterStatistics(STAT_DEALS), 0));
-   FileWrite(fh, "long_trades="           + DoubleToString(TesterStatistics(STAT_LONG_TRADES), 0));
-   FileWrite(fh, "short_trades="          + DoubleToString(TesterStatistics(STAT_SHORT_TRADES), 0));
-   FileWrite(fh, "profit_long_trades="    + DoubleToString(TesterStatistics(STAT_PROFIT_LONGTRADES), 0));
-   FileWrite(fh, "profit_short_trades="   + DoubleToString(TesterStatistics(STAT_PROFIT_SHORTTRADES), 0));
    FileWrite(fh, "time_in_trade_percent=" + DoubleToString(pct_trade, 2));
    FileWrite(fh, "time_in_loss_percent="  + DoubleToString(pct_loss, 2));
    FileWrite(fh, "average_trade_hours="   + DoubleToString(_er_AvgTradeHours(magic), 2));
+   FileWrite(fh, "reward_risk="           + DoubleToString((eq_dd!=0.0)?(profit/eq_dd):0.0, 6));
+
+   // Các thông số MT5
+   FileWrite(fh, "profit="                + DoubleToString(TesterStatistics(STAT_PROFIT), 2));
+   FileWrite(fh, "gross_profit="          + DoubleToString(TesterStatistics(STAT_GROSS_PROFIT), 2));
+   FileWrite(fh, "gross_loss="            + DoubleToString(TesterStatistics(STAT_GROSS_LOSS), 2));
+   FileWrite(fh, "profit_factor="         + DoubleToString(TesterStatistics(STAT_PROFIT_FACTOR), 4));
+   FileWrite(fh, "expected_payoff="       + DoubleToString(TesterStatistics(STAT_EXPECTED_PAYOFF), 2));
+   FileWrite(fh, "recovery_factor="       + DoubleToString(TesterStatistics(STAT_RECOVERY_FACTOR), 4));
+   FileWrite(fh, "sharpe_ratio="          + DoubleToString(TesterStatistics(STAT_SHARPE_RATIO), 4));
+   FileWrite(fh, "balance_dd="            + DoubleToString(TesterStatistics(STAT_BALANCE_DD), 2));
+   FileWrite(fh, "equity_dd="             + DoubleToString(TesterStatistics(STAT_EQUITY_DD), 2));
+   FileWrite(fh, "min_marginlevel="       + DoubleToString(TesterStatistics(STAT_MIN_MARGINLEVEL), 2));
+   FileWrite(fh, "deals="                 + DoubleToString(TesterStatistics(STAT_DEALS), 0));
+   FileWrite(fh, "trades="                + DoubleToString(TesterStatistics(STAT_TRADES), 0));
+   FileWrite(fh, "profit_trades="         + DoubleToString(TesterStatistics(STAT_PROFIT_TRADES), 0));
+   FileWrite(fh, "loss_trades="           + DoubleToString(TesterStatistics(STAT_LOSS_TRADES), 0));
+   FileWrite(fh, "max_profit_trade="      + DoubleToString(TesterStatistics(STAT_MAX_PROFITTRADE), 2));
+   FileWrite(fh, "max_loss_trade="        + DoubleToString(TesterStatistics(STAT_MAX_LOSSTRADE), 2));
+   FileWrite(fh, "con_profit_max_money="  + DoubleToString(TesterStatistics(STAT_CONPROFITMAX), 2));
+   FileWrite(fh, "con_loss_max_money="    + DoubleToString(TesterStatistics(STAT_CONLOSSMAX), 2));
+
    FileClose(fh);
 }
 
@@ -244,9 +253,13 @@ void _er_OnTick(datetime t, int magic=-1) { _er_SaveDailyEquity(t, magic); }
 double _er_OnTester(const string fp, int magic=-1)
 {
    _er_EnsureFinalSnapshot(magic);
-   _er_WriteEquityCSV(fp);
+   
+   // Bơm thêm ID siêu nhỏ (Microsecond) vào tên file để 45 kịch bản không đè lên nhau
+   string unique_fp = fp + "_pass_" + IntegerToString(GetMicrosecondCount());
+   
+   _er_WriteEquityCSV(unique_fp);
    double sh = _er_CustomSharpe();
-   _er_WriteStatsReport(fp, sh, magic);
+   _er_WriteStatsReport(unique_fp, sh, magic);
    return sh;
 }
 //+------------------------------------------------------------------+
@@ -276,16 +289,45 @@ def _inj_inject_after(source: str, brace_pos: int, code: str) -> str:
 
 
 def _inj_insert_block(source: str) -> str:
-    includes = list(re.finditer(r'^[ \t]*#include\b.*$', source, re.MULTILINE))
+    # 1. Đọc file input.ini siêu an toàn (chống lỗi font BOM)
+    inputs_code = "   // --- THONG SO EA TU DONG --- \n"
+    try:
+        import configparser
+        cfg = configparser.ConfigParser()
+        cfg.optionxform = str
+        # Đọc bằng utf-8-sig để triệt tiêu mọi lỗi ẩn của file text
+        with open(str(INPUT_INI_PATH), 'r', encoding='utf-8-sig') as f:
+            cfg.read_file(f)
+        if cfg.has_section('TesterInputs'):
+            for key, val in cfg.items('TesterInputs'):
+                if ' ' not in key:
+                    # Trở lại dùng ép kiểu (string) vạn năng, loại bỏ GlobalVariableGet
+                    inputs_code += f'   FileWrite(fh, "{key}=" + (string){key});\n'
+    except Exception as e:
+        print(f"Lỗi đọc input: {e}")
+
+    # 2. Thay thế điểm neo thành code in thông số
+    block = EQUITY_BLOCK.replace('//--- INJECT_INPUTS_HERE ---', inputs_code)
+
+    # 3. TẠO KHAI BÁO TRƯỚC (FORWARD DECLARATIONS) NHÉT LÊN ĐẦU FILE
+    forward_decls = "\n//--- FORWARD DECLARATIONS (Chong loi Compile) ---\n"
+    forward_decls += "void _er_OnInit();\n"
+    forward_decls += "void _er_OnTick(datetime t, int magic=-1);\n"
+    forward_decls += "double _er_OnTester(const string fp, int magic=-1);\n"
+    forward_decls += "//------------------------------------------------\n"
+
+    # Tìm vị trí ngay dưới #include để nhét Khai báo trước vào
+    import re
+    includes = list(re.finditer(r'^[ \t]*#(include|property)\b.*$', source, re.MULTILINE))
     if includes:
         pos = includes[-1].end()
-        return source[:pos] + '\n' + EQUITY_BLOCK + source[pos:]
-    props = list(re.finditer(r'^[ \t]*#property\b.*$', source, re.MULTILINE))
-    if props:
-        pos = props[-1].end()
-        return source[:pos] + '\n' + EQUITY_BLOCK + source[pos:]
-    return EQUITY_BLOCK + '\n' + source
+        source = source[:pos] + '\n' + forward_decls + source[pos:]
+    else:
+        source = forward_decls + '\n' + source
 
+    # 4. ĐẨY TOÀN BỘ KHỐI LỆNH (BLOCK) XUỐNG ĐÁY FILE
+    # Nằm ở đây, nó sẽ "thấy" toàn bộ các biến input (Lot, TP, MA...) của EA!
+    return source + '\n\n//--- INJECTED BY PYTHON (BOTTOM) ---\n' + block + '\n'
 
 def inject_ea(mq5_path: Path, magic: int) -> bool:
     """Inject equity reporter vào file .mq5. Trả về True nếu inject mới, False nếu skip/lỗi."""
@@ -316,8 +358,9 @@ def inject_ea(mq5_path: Path, magic: int) -> bool:
             source = _inj_inject_after(source, brace, tick_code)
 
     prefix = '_Symbol + "_" + _er_TFToText((ENUM_TIMEFRAMES)_Period)'
-    if re.search(r'\bOnTester\s*\(\s*\)', source):
-        brace = _inj_find_func_open_brace(source, r'\bdouble\s+OnTester\s*\(\s*\)')
+    # Nâng cấp bộ lọc để nhận diện được cả OnTester() lẫn OnTester(void)
+    if re.search(r'\bOnTester\s*\([^)]*\)', source):
+        brace = _inj_find_func_open_brace(source, r'\bdouble\s+OnTester\s*\([^)]*\)')
         if brace is not None:
             source = _inj_inject_after(source, brace, f'   _er_OnTester({prefix}{ms});\n')
     else:
@@ -377,20 +420,43 @@ def get_inject_magic(input_cfg) -> int:
 
 
 def maybe_inject_and_compile(input_cfg, mt5_folder_path: Path, mt5_program_path: str) -> bool:
-    """
-    Tự động inject + compile EA nếu chưa là _EBR.
-    Cập nhật input_cfg['Tester']['expert'] → _EBR trong memory.
-    Trả về True nếu sẵn sàng chạy, False nếu lỗi.
-    """
     expert_val = input_cfg.get('Tester', 'expert')
-
-    # Đã là _XYZ rồi → bỏ qua inject
     expert_base = expert_val
     if expert_base.lower().endswith('.ex5') or expert_base.lower().endswith('.mq5'):
         expert_base = expert_base[:-4]
-    if expert_base.endswith('_XYZ'):
-        log(f'[Inject] Expert đã là _XYZ: {expert_val}')
-        return True
+    if expert_base.endswith('_XYZ'): return True
+
+    expert_stem = expert_val
+    if expert_stem.lower().endswith('.ex5'): expert_stem = expert_stem[:-4]
+    elif expert_stem.lower().endswith('.mq5'): expert_stem = expert_stem[:-4]
+    mq5_path = mt5_folder_path / 'MQL5' / (expert_stem + '.mq5')
+    if not mq5_path.exists():
+        fallback = mt5_folder_path / 'MQL5' / 'Experts' / (expert_stem + '.mq5')
+        if fallback.exists(): mq5_path = fallback
+        else: return False
+
+    ebr_path = mq5_path.parent / (mq5_path.stem + '_XYZ.mq5')
+    ex5_path = ebr_path.with_suffix('.ex5')
+    magic = get_inject_magic(input_cfg)
+
+    # --- TỰ ĐỘNG TRẢM FILE CŨ ĐỂ ÉP TOOL TIÊM CODE MỚI ---
+    if ebr_path.exists():
+        try: ebr_path.unlink()
+        except: pass
+    if ex5_path.exists():
+        try: ex5_path.unlink()
+        except: pass
+
+    # Tiêm code mới nhất
+    inject_ea(mq5_path, magic)
+
+    metaeditor_path = find_metaeditor_path(mt5_program_path)
+    if not metaeditor_path: return False
+    if not compile_mq5(metaeditor_path, ebr_path): return False
+
+    new_expert = expert_val[:-4] + '_XYZ.ex5' if expert_val.lower().endswith('.ex5') else expert_val + '_XYZ'
+    input_cfg.set('Tester', 'expert', new_expert)
+    return True
 
     # Tìm file .mq5 — strip .ex5 nếu user để nguyên đuôi trong input.ini
     expert_stem = expert_val
@@ -714,37 +780,97 @@ def build_input_symbols_period(input_cfg):
     return input_symbols_period
 
 
+import configparser
+from datetime import datetime
+
 def copy_agent_outputs(mt5_tester_path, reports_path, symbol_period=None):
+    def read_file_safe(filepath):
+        try:
+            with open(filepath, 'r', encoding='utf-16') as f: return f.read()
+        except:
+            with open(filepath, 'r', encoding='utf-8-sig', errors='ignore') as f: return f.read()
+
+    ea_name = "EA"
+    try:
+        cfg = configparser.ConfigParser()
+        cfg.read('input.ini', encoding='utf-8')
+        if cfg.has_section('Tester') and cfg.has_option('Tester', 'expert'):
+            ea_val = cfg.get('Tester', 'expert')
+            ea_name = ea_val.split('.ex5')[0].replace('_XYZ', '').replace('\\', '/').split('/')[-1]
+    except Exception: pass
+
     allfolderfile = os.listdir(mt5_tester_path)
     copied_csv = 0
     copied_txt = 0
-    # Subfolder riêng để giữ nguyên file agent theo từng job
-    if symbol_period:
-        job_backup_path = os.path.join(reports_path, 'agents', symbol_period)
-        os.makedirs(job_backup_path, exist_ok=True)
-    else:
-        job_backup_path = None
+    
+    target_dir = os.path.join(reports_path, 'agents', symbol_period) if symbol_period else os.path.join(reports_path, 'agents')
+    os.makedirs(target_dir, exist_ok=True)
+        
     for foldername in allfolderfile:
-        if 'Agent' not in foldername:
-            continue
+        if 'Agent' not in foldername: continue
         filepath = os.path.join(mt5_tester_path, foldername, 'MQL5', 'Files')
-        if not os.path.isdir(filepath):
-            continue
-        for filename in os.listdir(filepath):
-            lower_name = filename.lower()
-            source_path = os.path.join(filepath, filename)
-            if lower_name.endswith('.csv') or lower_name.endswith('.txt'):
-                # Tên file unique: thêm agent prefix để tránh overwrite giữa các pass
-                name, ext = os.path.splitext(filename)
-                unique_filename = f"{foldername}_{name}{ext}"
-                shutil.copyfile(source_path, os.path.join(reports_path, unique_filename))
-                # Copy vào subfolder agents\<symbol_period>\ để giữ nguyên
-                if job_backup_path:
-                    shutil.copyfile(source_path, os.path.join(job_backup_path, unique_filename))
-                if lower_name.endswith('.csv'):
-                    copied_csv += 1
-                else:
+        if not os.path.isdir(filepath): continue
+            
+        files_in_dir = os.listdir(filepath)
+        csv_files = [f for f in files_in_dir if f.lower().endswith('.csv')]
+        
+        for csv_filename in csv_files:
+            source_csv = os.path.join(filepath, csv_filename)
+            csv_content = read_file_safe(source_csv)
+            if not csv_content: continue
+            csv_content = csv_content.replace('\t', ',')
+                
+            txt_filename = csv_filename[:-15] + "_report.txt" if "_equity_day.csv" in csv_filename.lower() else os.path.splitext(csv_filename)[0] + ".txt"
+            
+            txt_combined_content = ""
+            params = {}
+            if txt_filename in files_in_dir:
+                txt_content = read_file_safe(os.path.join(filepath, txt_filename))
+                if txt_content:
+                    txt_combined_content += f"--- BAO CAO: {txt_filename} ---,\n"
+                    for line in txt_content.splitlines():
+                        if '=' in line:
+                            parts = line.split('=', 1)
+                            key = parts[0].strip().lower() # Chuyển thành chữ thường để dễ so sánh
+                            val = parts[1].strip()
+                            params[key] = val
+                            txt_combined_content += f'"{parts[0].strip()}","{val}"\n'
+                        else:
+                            txt_combined_content += f'"{line}",\n'
+                    txt_combined_content += ",\n"
                     copied_txt += 1
+            
+            symbol = params.get('symbol', 'Unknown')
+            timeframe = params.get('timeframe', 'TF')
+            
+            # --- TỪ ĐIỂN BẮT CHỮ SIÊU ĐA NĂNG ---
+            def get_val(keys_list, default='X'):
+                for k in keys_list:
+                    if k in params: return params[k]
+                return default
+
+            # Cứ EA nào có biến chứa các chữ này, tool tự động bốc số ra
+            lot = get_val(['lots', 'lot', 'lot_size', 'inplots', 'volume', 'inp_lot'])
+            tp = get_val(['takeprofit', 'take_profit', 'tp', 'tp_points', 'inptakeprofit', 'inp_takeprofitpts'])
+            sl = get_val(['stoploss', 'stop_loss', 'sl', 'sl_points', 'inpstoploss', 'inp_stoplosspts'])
+            
+            # Chống ghi đè 100% bằng Microsecond và Pass ID
+            pass_match = re.search(r'pass_(\d+)', csv_filename)
+            pass_id = pass_match.group(1) if pass_match else str(copied_csv)
+            file_mtime = os.path.getmtime(source_csv)
+            now_str = datetime.fromtimestamp(file_mtime).strftime("%Y%m%d_%H%M%S")
+            
+            # Xuất tên file có đủ: Cặp tiền, Thời gian, Lot, TP, SL, và số PassID
+            new_filename = f"{ea_name}_{symbol}_{timeframe}_{now_str}_Lot{lot}_TP{tp}_SL{sl}_{foldername}_Pass{pass_id}.csv"
+            
+            try:
+                with open(os.path.join(target_dir, new_filename), 'w', encoding='utf-8-sig') as f_out:
+                    if txt_combined_content: f_out.write(txt_combined_content)
+                    f_out.write("--- DU LIEU EQUITY ---,\n")
+                    f_out.write(csv_content)
+                copied_csv += 1
+            except Exception as e: print(f'Lỗi gộp: {e}')
+                
     return copied_csv, copied_txt
 
 
