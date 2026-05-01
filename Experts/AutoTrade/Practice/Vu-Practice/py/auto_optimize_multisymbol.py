@@ -802,75 +802,73 @@ def copy_agent_outputs(mt5_tester_path, reports_path, symbol_period=None):
     allfolderfile = os.listdir(mt5_tester_path)
     copied_csv = 0
     copied_txt = 0
-    
+
     target_dir = os.path.join(reports_path, 'agents', symbol_period) if symbol_period else os.path.join(reports_path, 'agents')
     os.makedirs(target_dir, exist_ok=True)
-        
+
+    # --- BƯỚC 1: Thu thập tất cả file CSV từ mọi Agent ---
+    all_csv_entries = []  # list of (mtime, csv_filename, filepath, foldername)
     for foldername in allfolderfile:
         if 'Agent' not in foldername: continue
         filepath = os.path.join(mt5_tester_path, foldername, 'MQL5', 'Files')
         if not os.path.isdir(filepath): continue
-            
-        files_in_dir = os.listdir(filepath)
-        csv_files = [f for f in files_in_dir if f.lower().endswith('.csv')]
-        
-        for csv_filename in csv_files:
+        for csv_filename in os.listdir(filepath):
+            if not csv_filename.lower().endswith('.csv'): continue
             source_csv = os.path.join(filepath, csv_filename)
-            csv_content = read_file_safe(source_csv)
-            if not csv_content: continue
-            csv_content = csv_content.replace('\t', ',')
-                
-            txt_filename = csv_filename[:-15] + "_report.txt" if "_equity_day.csv" in csv_filename.lower() else os.path.splitext(csv_filename)[0] + ".txt"
-            
-            txt_combined_content = ""
-            params = {}
-            if txt_filename in files_in_dir:
-                txt_content = read_file_safe(os.path.join(filepath, txt_filename))
-                if txt_content:
-                    txt_combined_content += f"--- BAO CAO: {txt_filename} ---,\n"
-                    for line in txt_content.splitlines():
-                        if '=' in line:
-                            parts = line.split('=', 1)
-                            key = parts[0].strip().lower() # Chuyển thành chữ thường để dễ so sánh
-                            val = parts[1].strip()
-                            params[key] = val
-                            txt_combined_content += f'"{parts[0].strip()}","{val}"\n'
-                        else:
-                            txt_combined_content += f'"{line}",\n'
-                    txt_combined_content += ",\n"
-                    copied_txt += 1
-            
-            symbol = params.get('symbol', 'Unknown')
-            timeframe = params.get('timeframe', 'TF')
-            
-            # --- TỪ ĐIỂN BẮT CHỮ SIÊU ĐA NĂNG ---
-            def get_val(keys_list, default='X'):
-                for k in keys_list:
-                    if k in params: return params[k]
-                return default
+            mtime = os.path.getmtime(source_csv)
+            all_csv_entries.append((mtime, csv_filename, filepath, foldername))
 
-            # Cứ EA nào có biến chứa các chữ này, tool tự động bốc số ra
-            lot = get_val(['lots', 'lot', 'lot_size', 'inplots', 'volume', 'inp_lot'])
-            tp = get_val(['takeprofit', 'take_profit', 'tp', 'tp_points', 'inptakeprofit', 'inp_takeprofitpts'])
-            sl = get_val(['stoploss', 'stop_loss', 'sl', 'sl_points', 'inpstoploss', 'inp_stoplosspts'])
-            
-            # Chống ghi đè 100% bằng Microsecond và Pass ID
-            pass_match = re.search(r'pass_(\d+)', csv_filename)
-            pass_id = pass_match.group(1) if pass_match else str(copied_csv)
-            file_mtime = os.path.getmtime(source_csv)
-            now_str = datetime.fromtimestamp(file_mtime).strftime("%Y%m%d_%H%M%S")
-            
-            # Xuất tên file có đủ: Cặp tiền, Thời gian, Lot, TP, SL, và số PassID
-            new_filename = f"{ea_name}_{symbol}_{timeframe}_{now_str}_Lot{lot}_TP{tp}_SL{sl}_{foldername}_Pass{pass_id}.csv"
-            
-            try:
-                with open(os.path.join(target_dir, new_filename), 'w', encoding='utf-8-sig') as f_out:
-                    if txt_combined_content: f_out.write(txt_combined_content)
-                    f_out.write("--- DU LIEU EQUITY ---,\n")
-                    f_out.write(csv_content)
-                copied_csv += 1
-            except Exception as e: print(f'Lỗi gộp: {e}')
-                
+    # --- BƯỚC 2: Sort theo thời gian chỉnh sửa (file xong trước → Pass nhỏ hơn) ---
+    all_csv_entries.sort(key=lambda x: (x[0], x[1]))
+
+    # --- BƯỚC 3: Xử lý từng file theo thứ tự, đánh Pass tuần tự ---
+    for pass_seq, (mtime, csv_filename, filepath, foldername) in enumerate(all_csv_entries, start=1):
+        source_csv = os.path.join(filepath, csv_filename)
+        csv_content = read_file_safe(source_csv)
+        if not csv_content: continue
+
+        files_in_dir = os.listdir(filepath)
+        txt_filename = csv_filename[:-15] + "_report.txt" if "_equity_day.csv" in csv_filename.lower() else os.path.splitext(csv_filename)[0] + ".txt"
+
+        params = {}
+        if txt_filename in files_in_dir:
+            txt_content = read_file_safe(os.path.join(filepath, txt_filename))
+            if txt_content:
+                for line in txt_content.splitlines():
+                    if '=' in line:
+                        parts = line.split('=', 1)
+                        key = parts[0].strip().lower()
+                        val = parts[1].strip()
+                        params[key] = val
+                copied_txt += 1
+
+        symbol = params.get('symbol', 'Unknown')
+        timeframe = params.get('timeframe', 'TF')
+        now_str = datetime.fromtimestamp(mtime).strftime("%Y%m%d_%H%M%S")
+
+        new_filename = f"{ea_name}_{symbol}_{timeframe}_{now_str}_Pass{pass_seq}_equity_day.csv"
+
+        try:
+            with open(os.path.join(target_dir, new_filename), 'w', encoding='utf-8-sig') as f_out:
+                # Header chuẩn CSV 3 cột
+                f_out.write("type,key,value\n")
+                # Phần stats từ _report.txt
+                for k, v in params.items():
+                    f_out.write(f"stats,{k},{v}\n")
+                # Dòng trống tách biệt 2 phần
+                f_out.write(",,,\n")
+                # Phần equity từ _equity_day.csv
+                for line in csv_content.splitlines():
+                    line = line.replace('\t', ',').strip()
+                    if not line: continue
+                    if line.lower().startswith('date'): continue  # bỏ header gốc
+                    parts = line.split(',', 1)
+                    if len(parts) == 2:
+                        f_out.write(f"equity,{parts[0].strip()},{parts[1].strip()}\n")
+            copied_csv += 1
+        except Exception as e:
+            print(f'Lỗi gộp: {e}')
+
     return copied_csv, copied_txt
 
 
