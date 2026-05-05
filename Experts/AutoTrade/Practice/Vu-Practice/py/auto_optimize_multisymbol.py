@@ -790,14 +790,39 @@ def copy_agent_outputs(mt5_tester_path, reports_path, symbol_period=None):
         except:
             with open(filepath, 'r', encoding='utf-8-sig', errors='ignore') as f: return f.read()
 
+    # Đọc input.ini để lấy Settings
+    ini_expert = ini_period = ini_fromdate = ini_todate = ini_deposit = ini_leverage = ''
+    ini_company = ini_currency = ''
+    ini_inputs = {}
     ea_name = "EA"
     try:
         cfg = configparser.ConfigParser()
-        cfg.read('input.ini', encoding='utf-8')
-        if cfg.has_section('Tester') and cfg.has_option('Tester', 'expert'):
-            ea_val = cfg.get('Tester', 'expert')
+        cfg.optionxform = str
+        cfg.read(str(INPUT_INI_PATH), encoding='utf-8')
+        if cfg.has_section('Tester'):
+            ea_val = cfg.get('Tester', 'expert', fallback='')
             ea_name = ea_val.split('.ex5')[0].replace('_XYZ', '').replace('\\', '/').split('/')[-1]
+            ini_expert   = ea_name
+            ini_period   = cfg.get('Tester', 'period',    fallback='')
+            ini_fromdate = cfg.get('Tester', 'fromdate',  fallback='')
+            ini_todate   = cfg.get('Tester', 'todate',    fallback='')
+            ini_deposit  = cfg.get('Tester', 'deposit',   fallback='')
+            ini_leverage = cfg.get('Tester', 'leverage',  fallback='')
+            ini_company  = cfg.get('Tester', 'company',   fallback='')
+            ini_currency = cfg.get('Tester', 'currency',  fallback='')
+        if cfg.has_section('TesterInputs'):
+            for k, v in cfg.items('TesterInputs'):
+                ini_inputs[k] = v.split('||')[0].strip()
     except Exception: pass
+
+    METRIC_ORDER = [
+        'custom_sharpe', 'time_in_trade_percent', 'time_in_loss_percent',
+        'average_trade_hours', 'reward_risk', 'profit', 'gross_profit',
+        'gross_loss', 'profit_factor', 'expected_payoff', 'recovery_factor',
+        'sharpe_ratio', 'balance_dd', 'equity_dd', 'min_marginlevel',
+        'deals', 'trades', 'profit_trades', 'loss_trades', 'max_profit_trade',
+        'max_loss_trade', 'con_profit_max_money', 'con_loss_max_money',
+    ]
 
     allfolderfile = os.listdir(mt5_tester_path)
     copied_csv = 0
@@ -807,7 +832,7 @@ def copy_agent_outputs(mt5_tester_path, reports_path, symbol_period=None):
     os.makedirs(target_dir, exist_ok=True)
 
     # --- BƯỚC 1: Thu thập tất cả file CSV từ mọi Agent ---
-    all_csv_entries = []  # list of (mtime, csv_filename, filepath, foldername)
+    all_csv_entries = []
     for foldername in allfolderfile:
         if 'Agent' not in foldername: continue
         filepath = os.path.join(mt5_tester_path, foldername, 'MQL5', 'Files')
@@ -818,7 +843,7 @@ def copy_agent_outputs(mt5_tester_path, reports_path, symbol_period=None):
             mtime = os.path.getmtime(source_csv)
             all_csv_entries.append((mtime, csv_filename, filepath, foldername))
 
-    # --- BƯỚC 2: Sort theo thời gian chỉnh sửa (file xong trước → Pass nhỏ hơn) ---
+    # --- BƯỚC 2: Sort theo thời gian chỉnh sửa ---
     all_csv_entries.sort(key=lambda x: (x[0], x[1]))
 
     # --- BƯỚC 3: Xử lý từng file theo thứ tự, đánh Pass tuần tự ---
@@ -837,34 +862,53 @@ def copy_agent_outputs(mt5_tester_path, reports_path, symbol_period=None):
                 for line in txt_content.splitlines():
                     if '=' in line:
                         parts = line.split('=', 1)
-                        key = parts[0].strip().lower()
-                        val = parts[1].strip()
-                        params[key] = val
+                        params[parts[0].strip().lower()] = parts[1].strip()
                 copied_txt += 1
 
-        symbol = params.get('symbol', 'Unknown')
-        timeframe = params.get('timeframe', 'TF')
-        now_str = datetime.fromtimestamp(mtime).strftime("%Y%m%d_%H%M%S")
+        symbol    = params.get('symbol',    'Unknown')
+        timeframe = params.get('timeframe', ini_period or 'TF')
+        now_str   = datetime.fromtimestamp(mtime).strftime("%Y%m%d_%H%M%S")
+        test_time = f"{ini_fromdate} - {ini_todate}" if ini_fromdate and ini_todate else ''
 
         new_filename = f"{ea_name}_{symbol}_{timeframe}_{now_str}_Pass{pass_seq}_equity_day.csv"
 
         try:
             with open(os.path.join(target_dir, new_filename), 'w', encoding='utf-8-sig') as f_out:
-                # Header chuẩn CSV 3 cột
                 f_out.write("type,key,value\n")
-                # Phần stats từ _report.txt
-                for k, v in params.items():
-                    f_out.write(f"stats,{k},{v}\n")
-                # Dòng trống tách biệt 2 phần
-                f_out.write(",,,\n")
-                # Phần equity từ _equity_day.csv
+
+                # --- Settings ---
+                f_out.write(f"Settings,Expert,{ini_expert}\n")
+                f_out.write(f"Settings,Symbol,{symbol}\n")
+                f_out.write(f"Settings,Period,{timeframe}\n")
+                if test_time:
+                    f_out.write(f"Settings,TestTime,{test_time}\n")
+                for k, v in ini_inputs.items():
+                    f_out.write(f"Settings,Inputs,{k}={v}\n")
+                if ini_company:
+                    f_out.write(f"Settings,Company,{ini_company}\n")
+                if ini_currency:
+                    f_out.write(f"Settings,Currency,{ini_currency}\n")
+                if ini_deposit:
+                    f_out.write(f"Settings,Initial Deposit,{ini_deposit}\n")
+                if ini_leverage:
+                    f_out.write(f"Settings,Leverage,{ini_leverage}\n")
+                f_out.write(",,\n")
+
+                # --- Metric ---
+                for k in METRIC_ORDER:
+                    if k in params:
+                        f_out.write(f"Metric,{k},{params[k]}\n")
+                f_out.write(",,\n")
+
+                # --- Daily Equity ---
                 for line in csv_content.splitlines():
                     line = line.replace('\t', ',').strip()
                     if not line: continue
-                    if line.lower().startswith('date'): continue  # bỏ header gốc
+                    if line.lower().startswith('date'): continue
                     parts = line.split(',', 1)
                     if len(parts) == 2:
-                        f_out.write(f"equity,{parts[0].strip()},{parts[1].strip()}\n")
+                        f_out.write(f"Daily Equity,{parts[0].strip()},{parts[1].strip()}\n")
+
             copied_csv += 1
         except Exception as e:
             print(f'Lỗi gộp: {e}')
@@ -959,6 +1003,7 @@ def run_one_job(terminal_idx, mt5_folder_path, mt5_tester_path, reports_path, mt
 
         log(f'[Terminal {terminal_idx}] Launching MT5: {mt5_program_path}')
         subprocess.call([mt5_program_path, '/config:' + str(config_path)])
+
 
         opt_report_path = reports_path / f'{report_filename}.xml'
         target_path     = reports_path / f'{report_filename}.xlsx'
