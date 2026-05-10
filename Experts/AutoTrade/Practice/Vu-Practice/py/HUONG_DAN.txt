@@ -1,179 +1,526 @@
-===========================================================
-  HƯỚNG DẪN SỬ DỤNG TOOL OPTIMIZE MT5
+﻿===========================================================
+  HUONG DAN SU DUNG TOOL OPTIMIZE MT5  (v3.2)
 ===========================================================
 
---- CÁC FILE CHÍNH ---
+MUC LUC
+  1. CAC FILE CHINH
+  2. GIAI THICH TUNG HAM -- gen_input_ini.py
+  3. GIAI THICH TUNG HAM -- auto_optimize_multisymbol.py
+  4. CO CHE HOAT DONG (pipeline dau den cuoi)
+  5. CACH SU DUNG gen_input_ini.py
+  6. CACH SU DUNG auto_optimize_multisymbol.py
+  7. DINH DANG [TesterInputs]
+  8. DINH DANG FILE OUTPUT CSV
+  9. CAC LOI THUONG GAP
+
+
+===========================================================
+  1. CAC FILE CHINH
+===========================================================
 
   gen_input_ini.py
-    Tự động đọc file EA (.mq5) và sinh ra file input.ini
-    dùng cho auto_optimize_multisymbol.py.
+    Doc file EA (.mq5), phan tich cac tham so input,
+    roi sinh ra file input.ini de auto_optimize dung.
 
   auto_optimize_multisymbol.py
-    Chạy optimize MT5 theo từng symbol/period dựa trên input.ini.
-    Hỗ trợ nhiều MT5 terminal chạy song song.
+    Doc input.ini -> inject code vao EA -> compile ->
+    chay optimize tren MT5 -> thu thap ket qua -> xuat CSV/XLSX.
+    Ho tro nhieu MT5 terminal chay song song.
 
   input.ini
-    File cấu hình chính. Gồm 4 section:
-      [Symbols]       - danh sách symbol, suffix
-      [Tester]        - cấu hình backtest (model, deposit, date...)
-      [MT5]           - hash terminal + đường dẫn terminal64.exe
-      [TesterInputs]  - các tham số input của EA
+    File cau hinh chinh, gom 4 section:
+      [Symbols]       -- danh sach symbol va suffix (vd: "m" cho Exness micro)
+      [Tester]        -- cau hinh backtest (deposit, date, model...)
+      [MT5]           -- hash terminal + duong dan terminal64.exe
+      [TesterInputs]  -- tham so input cua EA voi range optimize
+
+  state.txt
+    Luu danh sach cac job (symbol_period) con lai.
+    Tu dong tao khi chay. Neu bi tat giua chung, chay lai
+    se tu resume tu day.
+
+  mt5_paths.ini
+    Luu hash + path MT5 tu lan cau hinh dau tien.
+    Dung khi input.ini khong co [MT5] section.
 
 
 ===========================================================
-  CÁCH DÙNG gen_input_ini.py
+  2. GIAI THICH TUNG HAM -- gen_input_ini.py
 ===========================================================
 
-  Bước 1: Mở PowerShell, vào thư mục py:
-    cd "...\Vu-Practice\py"
+  find_includes(mq5_text, base_dir)
+    Quet source code EA tim cac dong #include "file.mqh"
+    (dang dau nhay kep -- file cuc bo, khong phai thu vien MT5).
+    Tra ve list duong dan file include ton tai tren o dia.
 
-  Bước 2: Chạy script với đường dẫn file EA:
+  collect_source(mq5_path)
+    Gom toan bo source code: doc file .mq5 chinh, roi de quy
+    doc them tat ca file #include cuc bo.
+    Muc dich: dam bao parse duoc tham so input nam trong file header.
 
-    -- EA nằm trong thư mục py --
+  parse_inputs(source)
+    Dung regex de tim tat ca khai bao dang:
+      input <type> <name> = <default>;   // comment tuy chon
+    Tra ve list dict {name, type, default, comment}.
+
+  is_separator(param)
+    Nhan ra cac tham so "dai phan cach" trong EA (thuong la
+    input string _sep = "==========";) -- nhung tham so nay
+    khong co y nghia thuc, bi bo qua khi sinh input.ini.
+
+  normalize_bool(val)
+    Chuyen gia tri bool kieu MQL5 (true/false) sang so 0/1
+    vi MT5 Strategy Tester chi nhan dang so.
+
+  build_tester_input_line(param)
+    Sinh 1 dong [TesterInputs] theo format MT5:
+      TenParam=value||value||step||stop||N
+    Mac dinh N (khong optimize). Nguoi dung tu doi Y va dien range.
+
+  relative_expert_path(mq5_path)
+    Tinh duong dan EA tuong doi tu thu muc MQL5 de ghi vao
+    [Tester] expert= trong input.ini.
+    Vi du: AutoTrade\Practice\MyEA.ex5
+    (MT5 tu prepend "Experts\" nen khong can ghi lai)
+
+  detect_mt5_terminals()
+    Quet %APPDATA%\MetaQuotes\Terminal\ de tim tat ca
+    MT5 terminal da cai. Xac nhan bang su ton tai cua
+    origin.txt va thu muc MQL5.
+    Tra ve list {hash, label, path}.
+
+  find_mt5_program(terminal_folder)
+    Doc origin.txt cua terminal de tim duong dan terminal64.exe.
+    Fallback ve C:\Program Files\MetaTrader 5\terminal64.exe.
+
+  select_mt5_terminal()
+    Hoi nguoi dung chon 1 hoac nhieu terminal (hoac tat ca).
+    Tra ve list [(hash, program_path)].
+    Neu chi co 1 terminal -> tu chon khong can hoi.
+
+  find_set_file(mq5_path, selected_terminals)
+    Tim file .set cua EA trong thu muc MT5 Strategy Tester
+    (MQL5\Profiles\Tester\EaName.set).
+    File .set chua range optimize user da chinh tay trong MT5.
+
+  read_set_file(set_path)
+    Doc file .set (MT5 luu UTF-16 LE).
+    Parse tung dong "Param=value||start||step||stop||Y/N"
+    tra ve dict de dung thay cho gia tri mac dinh tu source code.
+
+  generate_input_ini(mq5_path, output_path, selected_terminals)
+    Ham chinh: doc EA -> parse inputs -> hoi chon terminal ->
+    tim file .set -> ghi toan bo ra input.ini.
+    Neu selected_terminals da truyen vao thi khong hoi lai
+    (tranh hoi 2 lan khi goi tu interactive_mode).
+
+  search_ea_on_windows(name)
+    Tim file .mq5 theo ten tren toan may.
+    Tim trong: tat ca MT5 terminal (MQL5\), Desktop,
+    Documents, Downloads. So sanh ten khong phan biet hoa thuong.
+
+  interactive_mode()
+    Che do hoi thoai khi chay khong co argument:
+      Buoc 1 -- Chon MT5 terminal
+      Buoc 2 -- Hoi ten EA (hoac keo tha file)
+      Buoc 3 -- Copy EA vao MQL5\Experts\ neu chua co
+      Buoc 4 -- Goi generate_input_ini de sinh input.ini
+
+
+===========================================================
+  3. GIAI THICH TUNG HAM -- auto_optimize_multisymbol.py
+===========================================================
+
+  -- PHAN INJECT EQUITY REPORTER --
+
+  EQUITY_BLOCK  (hang so chuoi)
+    Toan bo doan code MQL5 se duoc chen vao EA.
+    Gom: mang luu equity theo ngay, ham tinh custom Sharpe,
+    ham dem gio trong trade, ham ghi CSV equity, ham ghi
+    report.txt. Day la "bo do luong" duoc nhung vao EA.
+
+  _inj_find_func_open_brace(source, pattern)
+    Tim vi tri dau { mo dau cua mot ham (OnInit, OnTick...).
+    Dung de biet cho nao chen lenh goi _er_OnInit() v.v.
+
+  _inj_inject_after(source, brace_pos, code)
+    Chen doan code ngay sau dau { tim duoc.
+
+  _inj_insert_block(source)
+    Chuan bi toan bo EQUITY_BLOCK truoc khi chen:
+    - Doc input.ini de lay ten/gia tri tham so -> chen vao
+      diem neo //--- INJECT_INPUTS_HERE --- trong block.
+    - Them forward declarations len dau file (tranh loi compile).
+    - Day toan bo EQUITY_BLOCK xuong cuoi file source.
+
+  inject_ea(mq5_path, magic)
+    Thuc hien inject vao file .mq5:
+    - Chen _er_OnInit() vao trong OnInit()
+    - Chen _er_OnTick() vao trong OnTick() hoac OnBar()
+    - Chen _er_OnTester() vao trong OnTester()
+      (hoac them ham OnTester() moi neu EA chua co)
+    - Ghi ra file moi ten EA_XYZ.mq5
+    EA goc KHONG bi thay doi.
+
+  find_metaeditor_path(mt5_program_path)
+    Tim metaeditor64.exe canh terminal64.exe.
+
+  compile_mq5(metaeditor_path, mq5_path)
+    Compile file EA_XYZ.mq5 bang MetaEditor.
+    Cho toi da 30 giay cho .ex5 xuat hien.
+    Tra ve True neu compile thanh cong.
+
+  get_inject_magic(input_cfg)
+    Doc magic number tu input.ini:
+    - Uu tien [Tester] inject_magic
+    - Fallback tim key "magic" trong [TesterInputs]
+    Magic dung de loc dung position cua EA khi tinh equity.
+
+  maybe_inject_and_compile(input_cfg, mt5_folder_path, mt5_program_path)
+    Dieu phoi toan bo qua trinh inject + compile:
+    - Tim file .mq5 tu [Tester] expert=
+    - Luon xoa file EA_XYZ cu de ep inject code moi nhat
+    - Goi inject_ea -> compile_mq5
+    - Cap nhat [Tester] expert= thanh EA_XYZ.ex5
+
+  -- PHAN PIPELINE CHINH --
+
+  log(message)
+    In message ra man hinh ngay lap tuc (flush=True).
+
+  ask_yes_no(prompt)
+    Hoi yes/no, lap cho den khi nhan cau tra loi hop le.
+
+  ensure_input_exists()
+    Kiem tra input.ini ton tai. Neu khong -> exit ngay.
+
+  read_input_config()
+    Doc input.ini vao configparser, giu nguyen hoa thuong cua key.
+
+  show_input_ini_and_confirm()
+    In toan bo noi dung input.ini ra man hinh, hoi xac nhan.
+    Neu user chon NO -> dung tool.
+
+  detect_terminal_candidates()
+    Quet %APPDATA%\MetaQuotes\Terminal\ tim terminal hop le.
+    (Dung khi chua co cau hinh va user chon auto-detect)
+
+  build_mt5_paths_from_hash(mt5_hash)
+    Tu hash terminal, tinh ra 3 duong dan:
+      mt5_folder_path  = %APPDATA%\MetaQuotes\Terminal\{hash}
+      mt5_tester_path  = %APPDATA%\MetaQuotes\Tester\{hash}
+      reports_path     = mt5_folder_path\reports
+
+  save_mt5_local_config(mt5_hash, mt5_program_path)
+    Luu hash + program_path vao mt5_paths.ini de dung lai
+    o lan chay sau ma khong can cau hinh lai.
+
+  load_mt5_local_config()
+    Doc mt5_paths.ini. Tra ve (hash, program_path) hoac None.
+
+  load_mt5_from_input_ini()
+    Doc [MT5] section tu input.ini.
+    Ho tro 2 dang:
+      - Don: terminal_hash / mt5_program_path
+      - Nhieu: terminal_hashes / mt5_program_paths (cach nhau dau phay)
+
+  setup_mt5_paths()
+    Quyet dinh cau hinh MT5 theo thu tu uu tien:
+      1. Doc tu input.ini [MT5]  (uu tien nhat)
+      2. Doc tu mt5_paths.ini    (da cau hinh lan truoc)
+      3. Hoi nguoi dung          (lan dau chay)
+    Tra ve list [(folder_path, tester_path, reports_path, program_path)].
+
+  maybe_clear_state_and_reports(reports_path)
+    Hoi co muon xoa state.txt + toan bo thu muc reports khong.
+    Dung khi muon chay lai tu dau thay vi resume.
+
+  build_input_symbols_period(input_cfg)
+    Tao danh sach job tu symbols x periods trong input.ini.
+    VD: ["EURUSD_H1", "EURUSD_H4", "GBPUSD_H1", ...]
+    Neu state.txt ton tai -> resume tu danh sach con do.
+    Luu danh sach vao state.txt.
+
+  copy_agent_outputs(mt5_tester_path, reports_path, symbol_period)
+    Thu thap ket qua tu cac thu muc Agent trong mt5_tester_path:
+    - Quet tat ca Agent-xx\MQL5\Files\ tim file *_equity_day.csv
+    - Ghep voi *_report.txt tuong ung
+    - Sort theo thoi gian chinh sua -> danh so Pass tuan tu
+    - Ghi ra file CSV 3 section: Settings, Metric, Daily Equity
+    Tra ve (so csv da copy, so txt da doc).
+
+  convert_xml_to_xlsx(opt_report_path, target_path)
+    Chuyen file XML report cua MT5 Strategy Tester
+    sang file .xlsx (Excel) dung pandas.
+    Xoa file XML goc sau khi convert.
+
+  run_one_job(...)
+    Worker chay trong 1 thread, xu ly 1 MT5 terminal.
+    Lay job tu queue (symbol_period), chay lien tuc cho den het:
+    - Tinh fromdate tu symbol_startyear neu fromdate=0
+    - Ghi file config_{idx}.ini de truyen cho terminal MT5
+    - Goi subprocess MT5 voi /config:...
+    - Cho MT5 xong -> convert XML -> copy agent outputs
+    - Cap nhat state.txt sau moi job hoan thanh
+    - Neu khong co XML report -> dat stop_event -> cac thread khac cung dung
+
+  run()
+    Entry point cua toan bo tool:
+    1. Kiem tra input.ini
+    2. Hien thi + xac nhan
+    3. Setup MT5 paths
+    4. Inject + compile EA
+    5. Hoi xoa state/reports cu
+    6. Tao queue tu symbol x period
+    7. Tao 1 thread per terminal -> chay run_one_job song song
+    8. Cho tat ca thread xong -> in tong ket
+
+
+===========================================================
+  4. CO CHE HOAT DONG (pipeline dau den cuoi)
+===========================================================
+
+  BUOC A -- Sinh input.ini (gen_input_ini.py)
+  -------------------------------------------
+    1. Doc file EA.mq5 va tat ca #include cuc bo
+    2. Dung biểu thức chính quy(Regex) tim tat ca khai bao "input <type> <name> = <value>;"
+    3. Tim file .set trong MT5 Strategy Tester (neu co)
+       -> Dung range optimize tu .set thay vi gia tri mac dinh
+    4. Ghi input.ini voi 4 section: Symbols, Tester, MT5, TesterInputs
+
+  BUOC B -- Inject equity reporter (auto_optimize_multisymbol.py)
+  ---------------------------------------------------------------
+    EA goc: MyEA.mq5
+    |-> inject_ea()
+    MyEA_XYZ.mq5  (EA goc + EQUITY_BLOCK duoc chen vao)
+    |-> compile_mq5()
+    MyEA_XYZ.ex5  (ready de chay trong MT5)
+
+    Code duoc inject thuc hien 3 viec trong EA:
+    - OnInit()  -> khoi tao mang equity, bien dem gio
+    - OnTick()  -> moi tick: luu equity cuoi ngay, dem gio trong trade
+    - OnTester()-> ket thuc backtest: ghi CSV equity + report.txt,
+                   tra ve custom Sharpe ratio lam optimization criterion
+
+  BUOC C -- Chay optimize song song
+  ----------------------------------
+    Moi terminal MT5 chay trong 1 thread rieng.
+    Tat ca terminal lay job tu cung 1 queue.
+    VD: 25 symbol x 2 period = 50 job, 2 terminal
+    -> moi terminal chay ~25 job, tong thoi gian giam 50%.
+
+    Flow moi job:
+    1. Ghi config_{idx}.ini voi symbol/period cu the
+    2. Goi terminal64.exe /config:config_{idx}.ini
+    3. MT5 tu chay optimize -> luu ket qua vao:
+       - reports\opt_SYMBOL_PERIOD_...xml       (optimization report)
+       - Tester\{hash}\Agent-xx\MQL5\Files\     (equity CSV + report.txt)
+    4. convert_xml_to_xlsx()  -> reports\*.xlsx
+    5. copy_agent_outputs()   -> reports\agents\SYMBOL_PERIOD\*.csv
+    6. Cap nhat state.txt (xoa job vua xong)
+
+  BUOC D -- File output
+  ----------------------
+    reports\
+      opt_EURUSD_H1_..._EBR.xlsx    <- bang optimization pass day du
+      agents\
+        EURUSD_H1\
+          EA_EURUSD_H1_20260101_Pass1_equity_day.csv
+          EA_EURUSD_H1_20260101_Pass2_equity_day.csv
+          ...
+
+    Moi file CSV trong agents co 3 section:
+      Settings    -- EA name, symbol, period, thoi gian test, inputs
+      Metric      -- custom_sharpe, profit, dd, trades, ...
+      Daily Equity -- equity tung ngay trong backtest
+
+  CO CHE RESUME
+  -------------
+    state.txt luu danh sach job chua hoan thanh.
+    Khi tat tool giua chung, chay lai -> tool doc state.txt
+    -> bo qua cac job da xong -> tiep tuc tu job con lai.
+    Muon chay lai tu dau: chon YES khi tool hoi xoa state.txt.
+
+
+===========================================================
+  5. CACH SU DUNG gen_input_ini.py
+===========================================================
+
+  -- CACH 0: DOUBLE-CLICK (DE NHAT) --
+
+  Double-click file:  1_gen_input_ini.bat
+  Cua so cmd tu mo, lam theo huong dan tung buoc.
+
+
+  -- CACH 1: CHE DO HOI THOAI --
+
+    cd "...\py"
+    python gen_input_ini.py
+
+  Script hoi tung buoc:
+    (1) Chon MT5 terminal (tu chon neu chi co 1)
+    (2) "EA cua ban la gi?"
+        -> Nhap ten EA (VD: MyEA hoac MyEA.mq5)
+          Script tim file MyEA.mq5 trong MT5, Desktop, Documents, Downloads
+          Neu tim thay nhieu -> hien danh sach de chon
+        -> HOAC keo tha file .mq5 vao cua so terminal
+    (3) Script copy EA vao MQL5\Experts\ neu chua co
+    (4) Sinh input.ini
+
+  Sau do mo input.ini, chinh:
+    - symbols, period, fromdate, todate
+    - Params muon optimize: doi N -> Y, dien start||step||stop
+
+
+  -- CACH 2: TRUYEN DUONG DAN TRUC TIEP --
+
     python gen_input_ini.py TenEA.mq5
-
-    -- EA nằm ở thư mục khác (dùng đường dẫn tương đối) --
     python gen_input_ini.py "..\TenEA.mq5"
-
-    -- EA nằm bất kỳ đâu (dùng đường dẫn đầy đủ) --
     python gen_input_ini.py "C:\...\TenEA.mq5"
-
-    -- Chỉ định luôn file output --
     python gen_input_ini.py "TenEA.mq5" "C:\...\input.ini"
 
-  Bước 3: Script hỏi chọn MT5 terminal → nhập số → tự sinh input.ini
-
-  Bước 4: Mở input.ini, chỉnh lại:
-    - symbols, period, fromdate, todate
-    - Các param muốn optimize: đổi N → Y, điền start||step||stop
-
 
 ===========================================================
-  CÁCH DÙNG auto_optimize_multisymbol.py
+  6. CACH SU DUNG auto_optimize_multisymbol.py
 ===========================================================
 
-  Chắc chắn input.ini đã đúng, rồi chạy:
+  -- CACH 0: DOUBLE-CLICK --
+
+  Double-click file:  2_auto_optimize.bat
+
+
+  -- CACH 1: QUA TERMINAL --
+
+    cd "...\py"
     python auto_optimize_multisymbol.py
 
-  Script sẽ hỏi:
-    1. Xác nhận nội dung input.ini
-    2. Có xóa state.txt và reports cũ không
+  Script tu dong thuc hien (khong can lam gi them):
+    1. Kiem tra + hien thi input.ini -> hoi xac nhan
+    2. Inject equity code vao EA -> tao EA_XYZ.mq5
+    3. Compile EA_XYZ.mq5 -> tao EA_XYZ.ex5
+    4. Hoi xoa state.txt + reports cu (chon YES neu chay moi)
+    5. Tao queue: symbol x period -> luu state.txt
+    6. Moi terminal chay song song trong thread rieng
+    7. Moi job: chay MT5 -> convert XML -> copy CSV
+    8. In tong ket khi xong
 
-  Script tự động thực hiện các bước sau (không cần làm thêm gì):
-    1. Đọc input.ini → hiển thị → hỏi xác nhận
-    2. Inject equity code vào EA → tạo file EA_EBR.mq5
-    3. Compile EA_EBR.mq5 → tạo EA_EBR.ex5
-    4. Hỏi có xóa state.txt + reports cũ không
-    5. Tạo queue (symbol × period) → lưu vào state.txt
-    6. Loop từng job: chạy MT5 → copy output → convert XLSX
-    7. In tổng kết khi xong
-
-  Lưu ý về inject:
-    - EA gốc KHÔNG bị sửa, script tạo file mới tên EA_EBR.mq5
-    - Nếu EA_EBR.mq5 đã tồn tại → bỏ qua bước inject (resume an toàn)
-    - EA cần có OnInit() và OnTick() hoặc OnBar() để inject hoạt động
-
-  Output sau khi chạy xong:
-    reports\
-      agents\
-        EURUSD_H1\   ← equity_day.csv + report.txt
-        GBPUSD_H1\
-        ...
-      opt_EURUSD_H1_..._EBR.xlsx
-      opt_GBPUSD_H1_..._EBR.xlsx
+  Luu y ve inject:
+    - EA goc KHONG bi sua. File moi ten EA_XYZ.mq5 duoc tao
+    - File EA_XYZ cu bi xoa va tao lai moi lan chay
+      (de dam bao code inject luon la phien ban moi nhat)
+    - EA can co OnInit() va OnTick() de inject hoat dong dung
 
 
 ===========================================================
-  ĐỊNH DẠNG [TesterInputs]
+  7. DINH DANG [TesterInputs]
 ===========================================================
 
-  ParamName=value||value||step||stop||N     <- cố định (không optimize)
-  ParamName=start||start||step||stop||Y     <- optimize
+  ParamName=value||value||step||stop||N    <- co dinh (khong optimize)
+  ParamName=start||start||step||stop||Y    <- optimize
 
-  Ví dụ:
-    StopLoss=50||50||1||50||N               <- cố định 50
-    TakeProfit=100||50||10||200||Y          <- optimize từ 50 đến 200, bước 10
+  Vi du:
+    StopLoss=50||50||1||50||N              <- co dinh 50
+    TakeProfit=100||50||10||200||Y         <- optimize tu 50 den 200, buoc 10
 
-
-===========================================================
-  CÁC LỖI THƯỜNG GẶP
-===========================================================
-
-  [Lỗi 1] can't open file '...\gen_input_ini.py': No such file or directory
-  Nguyên nhân: Bạn đang đứng sai thư mục khi chạy, Python không tìm thấy script.
-  Cách sửa:
-    - Dùng đường dẫn đầy đủ đến script:
-      python "C:\...\py\gen_input_ini.py" "TenEA.mq5"
-    - HOẶC cd vào thư mục py trước rồi mới chạy.
-
-  [Lỗi 2] Không tìm thấy tham số input nào trong EA
-  Nguyên nhân: EA không có khai báo "input <type> <name> = <value>;"
-               hoặc file .mq5 không đúng.
-  Cách sửa: Kiểm tra lại đường dẫn file EA, đảm bảo là file .mq5.
-
-  [Lỗi 3] Không tìm thấy file: ...
-  Nguyên nhân: Đường dẫn EA truyền vào không tồn tại.
-  Cách sửa: Kiểm tra lại tên file và đường dẫn (chú ý khoảng trắng trong tên).
-            Nếu tên có khoảng trắng, phải bọc trong dấu nháy kép:
-              python gen_input_ini.py "Moving Average.mq5"
-
-  [Lỗi 4] Không tìm thấy mt5_tester_path / mt5_folder_path
-  Nguyên nhân: Hash terminal trong input.ini sai hoặc terminal chưa chạy lần nào.
-  Cách sửa: Kiểm tra lại [MT5] terminal_hash trong input.ini.
-            Hash đúng là tên thư mục trong:
-              %APPDATA%\MetaQuotes\Terminal\
-
-  [Lỗi 5] Không thấy XML report sau khi chạy optimize
-  Nguyên nhân: MT5 không hoàn thành optimize (thiếu data, sai symbol, bị crash...).
-  Cách sửa:
-    - Chạy thủ công trong MT5 Strategy Tester để kiểm tra.
-    - Kiểm tra symbol + suffix có đúng không.
-    - Tool sẽ dừng lại, sửa xong có thể tiếp tục nhờ state.txt.
-
-  [Lỗi 6] input.ini bị ghi đè mất cấu hình cũ
-  Nguyên nhân: Chạy gen_input_ini.py khi input.ini đã có nội dung.
-  Cách sửa: Hiện tại không có backup tự động.
-            Hãy copy input.ini ra nơi khác trước khi chạy lại script.
-
-  [Lỗi 7] [Inject] Compile FAIL — không tìm thấy .ex5
-  Nguyên nhân: MetaEditor compile EA_EBR.mq5 bị lỗi cú pháp.
-  Cách sửa:
-    - Mở file EA_EBR.mq5 trong MetaEditor → xem dòng lỗi.
-    - Thường do EA gốc có cú pháp đặc biệt làm inject sai vị trí.
-    - Xóa file EA_EBR.mq5 → báo lỗi cho người hỗ trợ.
-
-  [Lỗi 8] [Inject] Không tìm thấy metaeditor64.exe
-  Nguyên nhân: mt5_program_path trong input.ini sai, hoặc MetaTrader chưa cài.
-  Cách sửa:
-    - Kiểm tra [MT5] mt5_program_path trỏ đúng đến terminal64.exe.
-    - metaeditor64.exe phải nằm cùng thư mục với terminal64.exe.
-    - Ví dụ: C:\Program Files\MetaTrader 5\terminal64.exe
-
-  [Lỗi 9] [Inject] EA không có OnTick hoặc OnBar — inject bỏ qua
-  Nguyên nhân: EA không phải dạng event-driven thông thường.
-  Hậu quả: Equity không được ghi theo ngày, report.txt sẽ trống.
-  Cách sửa: EA phải có hàm OnTick() hoặc OnBar() để inject hoạt động.
-
-  [Lỗi 10] Ghi file EA_EBR.mq5 thất bại (PermissionError / file bị lock)
-  Nguyên nhân: File EA đang được mở trong MetaEditor.
-  Cách sửa: Đóng file EA trong MetaEditor trước khi chạy script.
-
-  [Lỗi 11] Không có file equity_day.csv hoặc report.txt trong agents\
-  Nguyên nhân 1: Inject không thành công (xem Lỗi 7, 9).
-  Nguyên nhân 2: MT5 không chạy đủ optimize pass (0 kết quả).
-  Nguyên nhân 3: EA_EBR.ex5 cũ từ lần trước, inject mới chưa được compile lại.
-  Cách sửa: Xóa EA_EBR.mq5 + EA_EBR.ex5 → chạy lại để inject + compile mới.
+  Cot 1 -- gia tri hien tai (MT5 dung de hien thi)
+  Cot 2 -- start (diem bat dau optimize)
+  Cot 3 -- step  (buoc nhay)
+  Cot 4 -- stop  (diem ket thuc)
+  Cot 5 -- Y/N   (Y = optimize, N = co dinh)
 
 
 ===========================================================
-  CƠ CHẾ RESUME (tiếp tục khi bị gián đoạn)
+  8. DINH DANG FILE OUTPUT CSV
 ===========================================================
 
-  auto_optimize_multisymbol.py lưu trạng thái vào state.txt.
-  Nếu tool bị tắt giữa chừng, chạy lại sẽ tự động tiếp tục
-  các job còn lại (không chạy lại từ đầu).
+  Moi file trong reports\agents\SYMBOL_PERIOD\ co cau truc:
 
-  Muốn chạy lại từ đầu: xóa state.txt (tool sẽ hỏi khi khởi động).
+    type,key,value
+    Settings,Expert,MyEA
+    Settings,Symbol,EURUSD
+    Settings,Period,H1
+    Settings,TestTime,2022.01.01 - 2026.01.01
+    Settings,Inputs,StopLoss=50
+    Settings,Inputs,TakeProfit=100
+    Settings,Company,Exness Technologies Ltd
+    Settings,Currency,USD
+    Settings,Initial Deposit,10000
+    Settings,Leverage,1:100
+    ,,
+    Metric,custom_sharpe,1.523400
+    Metric,profit,4521.30
+    Metric,profit_factor,1.8200
+    Metric,equity_dd,823.10
+    Metric,deals,142
+    ...
+    ,,
+    Daily Equity,2022.01.03,10000.00
+    Daily Equity,2022.01.04,10045.20
+    ...
+
+
+===========================================================
+  9. CAC LOI THUONG GAP
+===========================================================
+
+  [Loi 1] can't open file '...\gen_input_ini.py': No such file or directory
+  Nguyen nhan: Dang dung sai thu muc.
+  Cach sua: cd vao thu muc py truoc, hoac dung duong dan day du.
+
+  [Loi 2] Khong tim thay tham so input nao trong EA
+  Nguyen nhan: EA khong co khai bao "input <type> <name> = <value>;"
+  Cach sua: Kiem tra lai file .mq5 dung chua.
+
+  [Loi 3] Khong tim thay file: ...
+  Nguyen nhan: Duong dan EA sai.
+  Cach sua: Ten co khoang trang phai boc dau nhay kep:
+    python gen_input_ini.py "Moving Average.mq5"
+
+  [Loi 4] Khong tim thay mt5_tester_path / mt5_folder_path
+  Nguyen nhan: Hash terminal trong input.ini sai.
+  Cach sua: Kiem tra [MT5] terminal_hash.
+    Hash dung la ten thu muc trong: %APPDATA%\MetaQuotes\Terminal\
+
+  [Loi 5] Khong thay XML report sau khi chay optimize
+  Nguyen nhan: MT5 khong hoan thanh optimize (thieu data, sai symbol...).
+  Cach sua:
+    - Chay thu cong trong MT5 de kiem tra.
+    - Kiem tra symbol + suffix co dung khong.
+    - Tool dung lai, sua xong co the tiep tuc nho state.txt.
+
+  [Loi 6] input.ini bi ghi de mat cau hinh cu
+  Nguyen nhan: Chay gen_input_ini.py khi input.ini da co.
+  Cach sua: Copy input.ini ra noi khac truoc khi chay lai.
+
+  [Loi 7] [Inject] Compile FAIL -- khong tim thay .ex5
+  Nguyen nhan: MetaEditor bao loi cu phap khi compile EA_XYZ.mq5.
+  Cach sua:
+    - Mo EA_XYZ.mq5 trong MetaEditor -> xem dong loi.
+    - Thuong do EA goc co cu phap dac biet lam inject sai vi tri.
+    - Xoa EA_XYZ.mq5 -> bao loi de duoc ho tro.
+
+  [Loi 8] [Inject] Khong tim thay metaeditor64.exe
+  Nguyen nhan: mt5_program_path sai hoac MetaTrader chua cai.
+  Cach sua: Kiem tra [MT5] mt5_program_path tro dung den terminal64.exe.
+    metaeditor64.exe phai nam cung thu muc voi terminal64.exe.
+
+  [Loi 9] [Inject] EA khong co OnTick -- inject bo qua
+  Nguyen nhan: EA khong co ham OnTick() hoac OnBar().
+  Hau qua: Equity khong duoc ghi, report.txt se trong.
+  Cach sua: EA phai co OnTick() hoac OnBar() de inject hoat dong.
+
+  [Loi 10] PermissionError khi ghi EA_XYZ.mq5
+  Nguyen nhan: File dang duoc mo trong MetaEditor.
+  Cach sua: Dong file EA trong MetaEditor truoc khi chay.
+
+  [Loi 11] Khong co file equity_day.csv trong agents\
+  Nguyen nhan 1: Inject khong thanh cong (xem Loi 7, 9).
+  Nguyen nhan 2: MT5 khong chay du optimize pass (0 ket qua).
+  Cach sua: Xoa EA_XYZ.mq5 + EA_XYZ.ex5 -> chay lai.
+
+  [Loi 12] custom_sharpe = 0 trong tat ca pass
+  Nguyen nhan: EA khong co du du lieu equity (< 2 ngay).
+  Cach sua: Mo rong khoang thoi gian backtest (fromdate/todate).
 
 
 ===========================================================

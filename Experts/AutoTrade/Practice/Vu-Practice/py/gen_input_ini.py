@@ -5,7 +5,7 @@
 import re
 import sys
 import os
-import configparser
+import shutil
 from pathlib import Path
 
 if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
@@ -24,7 +24,7 @@ DEFAULT_TESTER = {
     "optimization":        "1",
     "optimizationcriterion": "6",
     "fromdate":            "0",
-    "todate":              "2025.01.01",
+    "todate":              "2026.01.01",
     "replacereport":       "1",
     "shutdownterminal":    "1",
     "period":              "H1",
@@ -273,7 +273,7 @@ def read_set_file(set_path):
     return result
 
 
-def generate_input_ini(mq5_path, output_path=None):
+def generate_input_ini(mq5_path, output_path=None, selected_terminals=None):
     mq5_path = Path(mq5_path)
     if not mq5_path.exists():
         print(f"Không tìm thấy file: {mq5_path}")
@@ -292,7 +292,8 @@ def generate_input_ini(mq5_path, output_path=None):
     tester["expert"] = expert_path
 
     # Chọn MT5 terminal(s)
-    selected_terminals = select_mt5_terminal()
+    if selected_terminals is None:
+        selected_terminals = select_mt5_terminal()
 
     lines = []
 
@@ -374,15 +375,132 @@ def generate_input_ini(mq5_path, output_path=None):
     print(content)
 
 
+def search_ea_on_windows(name: str) -> list:
+    """Tìm file .mq5 theo tên trên Windows.
+    Tìm trong: các MT5 terminal, Desktop, Documents, Downloads, ổ C.
+    Trả về list Path đã tìm thấy.
+    """
+    # Chuẩn hoá tên: bỏ đuôi nếu có để tìm không phân biệt hoa thường
+    stem = name.lower()
+    if stem.endswith('.mq5'):
+        stem = stem[:-4]
+
+    search_roots = []
+    appdata = Path(os.environ.get('APPDATA', ''))
+    userprofile = Path(os.environ.get('USERPROFILE', ''))
+
+    # 1. Thư mục MQL5 của tất cả MT5 terminal
+    base_term = appdata / 'MetaQuotes' / 'Terminal'
+    if base_term.exists():
+        for folder in base_term.iterdir():
+            if folder.is_dir() and folder.name.lower() not in ('common', 'community'):
+                mql5 = folder / 'MQL5'
+                if mql5.exists():
+                    search_roots.append(mql5)
+
+    # 2. Desktop, Documents, Downloads
+    for sub in ('Desktop', 'Documents', 'Downloads'):
+        p = userprofile / sub
+        if p.exists():
+            search_roots.append(p)
+
+    found = []
+    seen = set()
+    for root in search_roots:
+        try:
+            for path in root.rglob('*.mq5'):
+                if path.stem.lower() == stem:
+                    resolved = path.resolve()
+                    if resolved not in seen:
+                        seen.add(resolved)
+                        found.append(path)
+        except PermissionError:
+            pass
+
+    return found
+
+
+def interactive_mode():
+    """Chế độ hội thoại: hỏi tên EA → tìm → copy vào Experts → sinh input.ini."""
+    print("=" * 55)
+    print("  gen_input_ini — Hỗ trợ sinh input.ini cho MT5 EA")
+    print("=" * 55)
+    print()
+
+    # ---- Bước 1: Chọn MT5 terminal ----
+    candidates = detect_mt5_terminals()
+    if not candidates:
+        print("Không tìm thấy MT5 terminal nào trên máy. Thoát.")
+        sys.exit(1)
+
+    if len(candidates) == 1:
+        chosen = candidates[0]
+        print(f"MT5 terminal: {chosen['label']}")
+    else:
+        print("Tìm thấy nhiều MT5 terminal:")
+        for i, c in enumerate(candidates, 1):
+            print(f"  {i}. {c['label']}")
+        while True:
+            pick = input(f"Chọn terminal (1-{len(candidates)}): ").strip()
+            if pick.isdigit() and 1 <= int(pick) <= len(candidates):
+                chosen = candidates[int(pick) - 1]
+                break
+            print("Lựa chọn không hợp lệ.")
+
+    experts_dir = chosen['path'] / 'MQL5' / 'Experts'
+
+    # ---- Bước 2: Hỏi tên EA ----
+    while True:
+        raw = input("\nEA của bạn là gì? (nhập tên hoặc kéo thả file .mq5):\n> ").strip().strip('"').strip("'")
+        if not raw:
+            print("Vui lòng nhập tên EA.")
+            continue
+
+        candidate_path = Path(raw)
+
+        # Kéo thả / nhập đường dẫn đầy đủ
+        if candidate_path.exists() and candidate_path.suffix.lower() == '.mq5':
+            source = candidate_path
+        else:
+            # Nhập tên → tìm kiếm trên máy
+            print(f"Đang tìm '{raw}' trên máy...")
+            results = search_ea_on_windows(raw)
+            if not results:
+                print(f"Không tìm thấy '{raw}.mq5'. Thử nhập lại hoặc kéo thả file vào.")
+                continue
+            if len(results) == 1:
+                source = results[0]
+                print(f"Tìm thấy: {source}")
+            else:
+                print(f"Tìm thấy {len(results)} file:")
+                for i, r in enumerate(results, 1):
+                    print(f"  {i}. {r}")
+                while True:
+                    pick = input(f"Chọn file (1-{len(results)}): ").strip()
+                    if pick.isdigit() and 1 <= int(pick) <= len(results):
+                        source = results[int(pick) - 1]
+                        break
+                    print("Lựa chọn không hợp lệ.")
+        break
+
+    # ---- Bước 3: Copy vào Experts\ ----
+    dest = experts_dir / source.name
+    if dest.resolve() != source.resolve():
+        experts_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(str(source), str(dest))
+        print(f"\n[Copy] {source.name} → {dest}")
+    else:
+        print(f"\nEA đã nằm trong Experts: {dest}")
+
+    # ---- Bước 4: Sinh input.ini ----
+    print()
+    generate_input_ini(dest, selected_terminals=[(chosen['hash'], find_mt5_program(chosen['path']))])
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Cách dùng: python gen_input_ini.py <đường_dẫn_EA.mq5> [output_input.ini]")
-        print()
-        print("Ví dụ:")
-        print('  python gen_input_ini.py "EA_Event.mq5"')
-        print('  python gen_input_ini.py "C:\\...\\EA_Event.mq5" "C:\\...\\input.ini"')
-        sys.exit(0)
-
-    mq5 = sys.argv[1]
-    out  = sys.argv[2] if len(sys.argv) > 2 else None
-    generate_input_ini(mq5, out)
+        interactive_mode()
+    else:
+        mq5 = sys.argv[1]
+        out  = sys.argv[2] if len(sys.argv) > 2 else None
+        generate_input_ini(mq5, out)

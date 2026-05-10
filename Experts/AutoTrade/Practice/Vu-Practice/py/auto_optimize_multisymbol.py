@@ -67,6 +67,37 @@ int      _er_old_hour      = -1;
 int      _er_hour_in_trade = 0;
 int      _er_hour_in_loss  = 0;
 int      _er_total_hour_bt = 0;
+int      _er_tick_count    = 0;
+
+// --- Trade tracking ---
+struct _er_Trade {
+   ulong    pos_ticket;
+   string   symbol;
+   int      pos_type;    // POSITION_TYPE_BUY=0, POSITION_TYPE_SELL=1
+   double   volume;
+   datetime open_time;
+   double   open_price;
+   int      open_spread;
+   datetime close_time;
+   double   close_price;
+   int      close_spread;
+   double   sl;
+   double   tp;
+   double   commission;
+   double   swap;
+   double   profit;
+};
+_er_Trade _er_trades[];
+int       _er_trade_cnt    = 0;
+ulong     _er_pos_tickets[];
+int       _er_pos_types[];
+double    _er_pos_volumes[];
+datetime  _er_pos_open_times[];
+double    _er_pos_open_prices[];
+int       _er_pos_open_spreads[];
+double    _er_pos_sls[];
+double    _er_pos_tps[];
+int       _er_pos_cnt      = 0;
 
 string _er_TFToText(ENUM_TIMEFRAMES tf)
 {
@@ -120,6 +151,120 @@ void _er_SaveDailyEquity(datetime t, int magic)
    }
 }
 
+void _er_UpdatePositions(int magic)
+{
+   // Collect currently open positions for this symbol / magic
+   ulong cur_tk[];
+   int   cur_n = 0;
+   for(int i = PositionsTotal()-1; i >= 0; i--)
+   {
+      ulong t = PositionGetTicket(i);
+      if(t == 0 || !PositionSelectByTicket(t)) continue;
+      if(PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
+      if(magic >= 0 && (int)PositionGetInteger(POSITION_MAGIC) != magic) continue;
+      ArrayResize(cur_tk, cur_n+1);
+      cur_tk[cur_n++] = t;
+   }
+
+   // Detect closed positions (in tracking but no longer open)
+   for(int i = _er_pos_cnt-1; i >= 0; i--)
+   {
+      bool still_open = false;
+      for(int j = 0; j < cur_n; j++)
+         if(cur_tk[j] == _er_pos_tickets[i]) { still_open = true; break; }
+      if(still_open) continue;
+
+      _er_Trade tr;
+      ZeroMemory(tr);
+      tr.pos_ticket   = _er_pos_tickets[i];
+      tr.symbol       = _Symbol;
+      tr.pos_type     = _er_pos_types[i];
+      tr.volume       = _er_pos_volumes[i];
+      tr.open_time    = _er_pos_open_times[i];
+      tr.open_price   = _er_pos_open_prices[i];
+      tr.open_spread  = _er_pos_open_spreads[i];
+      tr.sl           = _er_pos_sls[i];
+      tr.tp           = _er_pos_tps[i];
+      tr.close_spread = (int)SymbolInfoInteger(_Symbol, SYMBOL_SPREAD);
+
+      if(HistorySelectByPosition(tr.pos_ticket))
+      {
+         int nh = HistoryDealsTotal();
+         for(int d = 0; d < nh; d++)
+         {
+            ulong dtk = HistoryDealGetTicket(d);
+            if(dtk == 0) continue;
+            if((ulong)HistoryDealGetInteger(dtk, DEAL_POSITION_ID) != tr.pos_ticket) continue;
+            int ety = (int)HistoryDealGetInteger(dtk, DEAL_ENTRY);
+            if(ety == DEAL_ENTRY_OUT)
+            {
+               tr.close_time  = (datetime)HistoryDealGetInteger(dtk, DEAL_TIME);
+               tr.close_price = HistoryDealGetDouble(dtk, DEAL_PRICE);
+               tr.swap        = HistoryDealGetDouble(dtk, DEAL_SWAP);
+               tr.profit      = HistoryDealGetDouble(dtk, DEAL_PROFIT);
+               tr.commission += HistoryDealGetDouble(dtk, DEAL_COMMISSION);
+            }
+            else if(ety == DEAL_ENTRY_IN)
+               tr.commission += HistoryDealGetDouble(dtk, DEAL_COMMISSION);
+         }
+      }
+
+      ArrayResize(_er_trades, _er_trade_cnt+1);
+      _er_trades[_er_trade_cnt++] = tr;
+
+      // Shift left to remove closed position from tracking
+      for(int j = i; j < _er_pos_cnt-1; j++)
+      {
+         _er_pos_tickets[j]      = _er_pos_tickets[j+1];
+         _er_pos_types[j]        = _er_pos_types[j+1];
+         _er_pos_volumes[j]      = _er_pos_volumes[j+1];
+         _er_pos_open_times[j]   = _er_pos_open_times[j+1];
+         _er_pos_open_prices[j]  = _er_pos_open_prices[j+1];
+         _er_pos_open_spreads[j] = _er_pos_open_spreads[j+1];
+         _er_pos_sls[j]          = _er_pos_sls[j+1];
+         _er_pos_tps[j]          = _er_pos_tps[j+1];
+      }
+      _er_pos_cnt--;
+      ArrayResize(_er_pos_tickets,      _er_pos_cnt);
+      ArrayResize(_er_pos_types,        _er_pos_cnt);
+      ArrayResize(_er_pos_volumes,      _er_pos_cnt);
+      ArrayResize(_er_pos_open_times,   _er_pos_cnt);
+      ArrayResize(_er_pos_open_prices,  _er_pos_cnt);
+      ArrayResize(_er_pos_open_spreads, _er_pos_cnt);
+      ArrayResize(_er_pos_sls,          _er_pos_cnt);
+      ArrayResize(_er_pos_tps,          _er_pos_cnt);
+   }
+
+   // Detect newly opened positions
+   for(int j = 0; j < cur_n; j++)
+   {
+      bool tracked = false;
+      for(int i = 0; i < _er_pos_cnt; i++)
+         if(_er_pos_tickets[i] == cur_tk[j]) { tracked = true; break; }
+      if(!tracked && PositionSelectByTicket(cur_tk[j]))
+      {
+         int n = _er_pos_cnt;
+         ArrayResize(_er_pos_tickets,      n+1);
+         ArrayResize(_er_pos_types,        n+1);
+         ArrayResize(_er_pos_volumes,      n+1);
+         ArrayResize(_er_pos_open_times,   n+1);
+         ArrayResize(_er_pos_open_prices,  n+1);
+         ArrayResize(_er_pos_open_spreads, n+1);
+         ArrayResize(_er_pos_sls,          n+1);
+         ArrayResize(_er_pos_tps,          n+1);
+         _er_pos_tickets[n]      = cur_tk[j];
+         _er_pos_types[n]        = (int)PositionGetInteger(POSITION_TYPE);
+         _er_pos_volumes[n]      = PositionGetDouble(POSITION_VOLUME);
+         _er_pos_open_times[n]   = (datetime)PositionGetInteger(POSITION_TIME);
+         _er_pos_open_prices[n]  = PositionGetDouble(POSITION_PRICE_OPEN);
+         _er_pos_open_spreads[n] = (int)SymbolInfoInteger(_Symbol, SYMBOL_SPREAD);
+         _er_pos_sls[n]          = PositionGetDouble(POSITION_SL);
+         _er_pos_tps[n]          = PositionGetDouble(POSITION_TP);
+         _er_pos_cnt++;
+      }
+   }
+}
+
 void _er_EnsureFinalSnapshot(int magic)
 {
    datetime now = TimeCurrent();
@@ -137,12 +282,45 @@ void _er_EnsureFinalSnapshot(int magic)
 
 void _er_WriteEquityCSV(const string fp)
 {
-   int fh = FileOpen(fp + "_equity_day.csv", FILE_WRITE|FILE_CSV);
+   int fh = FileOpen(fp + ".csv", FILE_WRITE|FILE_CSV);
    if(fh == INVALID_HANDLE) return;
    FileWrite(fh, "date", "equity");
    for(int i = 0; i < ArraySize(_er_equity_day); i++)
       FileWrite(fh, TimeToString(_er_equity_day_time[i], TIME_DATE),
                     DoubleToString(_er_equity_day[i], 2));
+   FileClose(fh);
+}
+
+void _er_WriteTradesCSV(const string fp)
+{
+   int fh = FileOpen(fp + "_trades.csv", FILE_WRITE|FILE_CSV|FILE_ANSI);
+   if(fh == INVALID_HANDLE) return;
+   FileWrite(fh,
+      "position_ticket", "symbol", "type", "volume",
+      "open_time",  "open_price",  "open_spread",
+      "close_time", "close_price", "close_spread",
+      "stop_loss", "take_profit", "commission", "swap", "profit");
+   for(int i = 0; i < _er_trade_cnt; i++)
+   {
+      string tp = (_er_trades[i].pos_type == POSITION_TYPE_BUY) ? "Buy" : "Sell";
+      FileWrite(fh,
+         IntegerToString(_er_trades[i].pos_ticket),
+         _er_trades[i].symbol,
+         tp,
+         DoubleToString(_er_trades[i].volume, 2),
+         TimeToString(_er_trades[i].open_time,  TIME_DATE|TIME_MINUTES),
+         DoubleToString(_er_trades[i].open_price,  _Digits),
+         IntegerToString(_er_trades[i].open_spread),
+         TimeToString(_er_trades[i].close_time, TIME_DATE|TIME_MINUTES),
+         DoubleToString(_er_trades[i].close_price, _Digits),
+         IntegerToString(_er_trades[i].close_spread),
+         DoubleToString(_er_trades[i].sl,         _Digits),
+         DoubleToString(_er_trades[i].tp,         _Digits),
+         DoubleToString(_er_trades[i].commission, 2),
+         DoubleToString(_er_trades[i].swap,       2),
+         DoubleToString(_er_trades[i].profit,     2)
+      );
+   }
    FileClose(fh);
 }
 
@@ -237,7 +415,10 @@ void _er_WriteStatsReport(const string fp, const double sharpe, int magic)
    FileWrite(fh, "max_loss_trade="        + DoubleToString(TesterStatistics(STAT_MAX_LOSSTRADE), 2));
    FileWrite(fh, "con_profit_max_money="  + DoubleToString(TesterStatistics(STAT_CONPROFITMAX), 2));
    FileWrite(fh, "con_loss_max_money="    + DoubleToString(TesterStatistics(STAT_CONLOSSMAX), 2));
-
+   FileWrite(fh, "history_quality="       + IntegerToString((int)MathRound(TesterStatistics((ENUM_STATISTICS)41))));
+   int _er_total_bars = Bars(_Symbol, _Period);
+   FileWrite(fh, "bars="                  + IntegerToString(_er_total_bars));
+   FileWrite(fh, "ticks="                 + IntegerToString(_er_tick_count));
    FileClose(fh);
 }
 
@@ -245,10 +426,22 @@ void _er_OnInit()
 {
    ArrayResize(_er_equity_day, 0); ArrayResize(_er_equity_day_time, 0);
    _er_saved_doy=_er_saved_year=_er_old_hour=-1;
-   _er_hour_in_trade=_er_hour_in_loss=_er_total_hour_bt=0;
+   _er_hour_in_trade=_er_hour_in_loss=_er_total_hour_bt=_er_tick_count=0;
+   _er_trade_cnt=_er_pos_cnt=0;
+   ArrayResize(_er_trades, 0);
+   ArrayResize(_er_pos_tickets, 0);      ArrayResize(_er_pos_types, 0);
+   ArrayResize(_er_pos_volumes, 0);
+   ArrayResize(_er_pos_open_times, 0);   ArrayResize(_er_pos_open_prices, 0);
+   ArrayResize(_er_pos_open_spreads, 0);
+   ArrayResize(_er_pos_sls, 0);          ArrayResize(_er_pos_tps, 0);
 }
 
-void _er_OnTick(datetime t, int magic=-1) { _er_SaveDailyEquity(t, magic); }
+void _er_OnTick(datetime t, int magic=-1)
+{
+   _er_tick_count++;
+   _er_SaveDailyEquity(t, magic);
+   _er_UpdatePositions(magic);
+}
 
 double _er_OnTester(const string fp, int magic=-1)
 {
@@ -260,6 +453,7 @@ double _er_OnTester(const string fp, int magic=-1)
    _er_WriteEquityCSV(unique_fp);
    double sh = _er_CustomSharpe();
    _er_WriteStatsReport(unique_fp, sh, magic);
+   _er_WriteTradesCSV(unique_fp);
    return sh;
 }
 //+------------------------------------------------------------------+
@@ -314,6 +508,8 @@ def _inj_insert_block(source: str) -> str:
     forward_decls += "void _er_OnInit();\n"
     forward_decls += "void _er_OnTick(datetime t, int magic=-1);\n"
     forward_decls += "double _er_OnTester(const string fp, int magic=-1);\n"
+    forward_decls += "void _er_UpdatePositions(int magic=-1);\n"
+    forward_decls += "void _er_WriteTradesCSV(const string fp);\n"
     forward_decls += "//------------------------------------------------\n"
 
     # Tìm vị trí ngay dưới #include để nhét Khai báo trước vào
@@ -456,84 +652,6 @@ def maybe_inject_and_compile(input_cfg, mt5_folder_path: Path, mt5_program_path:
 
     new_expert = expert_val[:-4] + '_XYZ.ex5' if expert_val.lower().endswith('.ex5') else expert_val + '_XYZ'
     input_cfg.set('Tester', 'expert', new_expert)
-    return True
-
-    # Tìm file .mq5 — strip .ex5 nếu user để nguyên đuôi trong input.ini
-    expert_stem = expert_val
-    if expert_stem.lower().endswith('.ex5'):
-        expert_stem = expert_stem[:-4]
-    elif expert_stem.lower().endswith('.mq5'):
-        expert_stem = expert_stem[:-4]
-    mq5_path = mt5_folder_path / 'MQL5' / (expert_stem + '.mq5')
-    if not mq5_path.exists():
-        # Thử thêm prefix Experts\ nếu chưa có (MT5 lưu EA trong MQL5\Experts\)
-        fallback = mt5_folder_path / 'MQL5' / 'Experts' / (expert_stem + '.mq5')
-        if fallback.exists():
-            mq5_path = fallback
-            log(f'[Inject] Tìm thấy tại Experts\\: {mq5_path.name}')
-        else:
-            log(f'[Inject] Không tìm thấy .mq5: {mq5_path}')
-            log(f'[Inject] Đã thử thêm tiền tố Experts\\, cũng không thấy: {fallback}')
-            log(f'[Inject] Kiểm tra lại expert= trong input.ini (đường dẫn tương đối từ MQL5\\)')
-            return False
-
-    ebr_path = mq5_path.parent / (mq5_path.stem + '_XYZ.mq5')
-    ex5_path = ebr_path.with_suffix('.ex5')
-
-    magic = get_inject_magic(input_cfg)
-
-    BUILTIN_MARKERS = ['CalculateCustomSharpe', 'WriteEquityDayFile', 'WriteStatsReportFile', 'SaveDailyEquity']
-
-    # Inject nếu _EBR chưa tồn tại hoặc chưa được inject
-    need_compile = True
-    if ebr_path.exists():
-        try:
-            content = ebr_path.read_text(encoding='utf-8', errors='replace')
-            already_injected = '_er_OnTick' in content or '_er_equity_day' in content
-            has_builtin = all(m in content for m in BUILTIN_MARKERS)
-            if already_injected or has_builtin:
-                log(f'[Inject] {ebr_path.name} đã inject sẵn, bỏ qua inject.')
-                if ex5_path.exists():
-                    log(f'[Inject] {ex5_path.name} đã tồn tại, bỏ qua compile.')
-                    need_compile = False
-            else:
-                log(f'[Inject] {ebr_path.name} tồn tại nhưng chưa inject — inject lại.')
-                inject_ea(mq5_path, magic)
-        except Exception:
-            inject_ea(mq5_path, magic)
-    else:
-        # Check source gốc xem đã có built-in equity reporter chưa
-        try:
-            src = mq5_path.read_text(encoding='utf-8', errors='replace')
-            has_builtin_src = all(m in src for m in BUILTIN_MARKERS)
-        except Exception:
-            has_builtin_src = False
-
-        if has_builtin_src:
-            log(f'[Inject] {mq5_path.name} đã có equity reporter sẵn — copy as-is.')
-            ebr_path.write_text(src, encoding='utf-8')
-            log(f'[Inject] Đã tạo: {ebr_path.name}')
-        else:
-            log(f'[Inject] Injecting {mq5_path.name} (magic={magic if magic >= 0 else "none"}) ...')
-            inject_ea(mq5_path, magic)
-            log(f'[Inject] Đã tạo: {ebr_path.name}')
-
-    if need_compile:
-        metaeditor_path = find_metaeditor_path(mt5_program_path)
-        if not metaeditor_path:
-            log(f'[Inject] Không tìm thấy metaeditor64.exe cạnh {mt5_program_path}')
-            return False
-        if not compile_mq5(metaeditor_path, ebr_path):
-            return False
-
-    # Cập nhật Expert trong memory → dùng cho tất cả jobs
-    # Chèn _XYZ trước .ex5 (hoặc thêm vào cuối nếu không có đuôi)
-    if expert_val.lower().endswith('.ex5'):
-        new_expert = expert_val[:-4] + '_XYZ.ex5'
-    else:
-        new_expert = expert_val + '_XYZ'
-    input_cfg.set('Tester', 'expert', new_expert)
-    log(f'[Inject] Expert cập nhật: {new_expert}')
     return True
 
 # ============================================================
@@ -822,6 +940,7 @@ def copy_agent_outputs(mt5_tester_path, reports_path, symbol_period=None):
         'sharpe_ratio', 'balance_dd', 'equity_dd', 'min_marginlevel',
         'deals', 'trades', 'profit_trades', 'loss_trades', 'max_profit_trade',
         'max_loss_trade', 'con_profit_max_money', 'con_loss_max_money',
+        'history_quality', 'bars', 'ticks',
     ]
 
     allfolderfile = os.listdir(mt5_tester_path)
@@ -839,6 +958,7 @@ def copy_agent_outputs(mt5_tester_path, reports_path, symbol_period=None):
         if not os.path.isdir(filepath): continue
         for csv_filename in os.listdir(filepath):
             if not csv_filename.lower().endswith('.csv'): continue
+            if csv_filename.lower().endswith('_trades.csv'): continue
             source_csv = os.path.join(filepath, csv_filename)
             mtime = os.path.getmtime(source_csv)
             all_csv_entries.append((mtime, csv_filename, filepath, foldername))
@@ -853,7 +973,11 @@ def copy_agent_outputs(mt5_tester_path, reports_path, symbol_period=None):
         if not csv_content: continue
 
         files_in_dir = os.listdir(filepath)
-        txt_filename = csv_filename[:-15] + "_report.txt" if "_equity_day.csv" in csv_filename.lower() else os.path.splitext(csv_filename)[0] + ".txt"
+        if "_equity_day.csv" in csv_filename.lower():
+            txt_filename = csv_filename[:-15] + "_report.txt"
+        else:
+            txt_filename = os.path.splitext(csv_filename)[0] + "_report.txt"
+        trades_filename = os.path.splitext(csv_filename)[0] + "_trades.csv"
 
         params = {}
         if txt_filename in files_in_dir:
@@ -865,12 +989,26 @@ def copy_agent_outputs(mt5_tester_path, reports_path, symbol_period=None):
                         params[parts[0].strip().lower()] = parts[1].strip()
                 copied_txt += 1
 
+        trade_header = []
+        trade_rows_data = []
+        if trades_filename in files_in_dir:
+            trades_content = read_file_safe(os.path.join(filepath, trades_filename))
+            if trades_content:
+                trade_lines = [l.strip() for l in trades_content.splitlines() if l.strip()]
+                if len(trade_lines) > 0:
+                    # MT5 FILE_CSV dùng tab làm delimiter
+                    sep = '\t' if '\t' in trade_lines[0] else ','
+                    trade_header = [f.strip() for f in trade_lines[0].split(sep)]
+                    for tline in trade_lines[1:]:
+                        vals = [v.strip() for v in tline.split(sep)]
+                        trade_rows_data.append(vals)
+
         symbol    = params.get('symbol',    'Unknown')
         timeframe = params.get('timeframe', ini_period or 'TF')
         now_str   = datetime.fromtimestamp(mtime).strftime("%Y%m%d_%H%M%S")
         test_time = f"{ini_fromdate} - {ini_todate}" if ini_fromdate and ini_todate else ''
 
-        new_filename = f"{ea_name}_{symbol}_{timeframe}_{now_str}_Pass{pass_seq}_equity_day.csv"
+        new_filename = f"{ea_name}_{symbol}_{timeframe}_{now_str}_Pass{pass_seq}.csv"
 
         try:
             with open(os.path.join(target_dir, new_filename), 'w', encoding='utf-8-sig') as f_out:
@@ -908,6 +1046,14 @@ def copy_agent_outputs(mt5_tester_path, reports_path, symbol_period=None):
                     parts = line.split(',', 1)
                     if len(parts) == 2:
                         f_out.write(f"Daily Equity,{parts[0].strip()},{parts[1].strip()}\n")
+
+                # --- Trade Info ---
+                if trade_header and trade_rows_data:
+                    f_out.write(",,\n")
+                    for idx, vals in enumerate(trade_rows_data, start=1):
+                        for col_idx, col_name in enumerate(trade_header):
+                            val = vals[col_idx] if col_idx < len(vals) else ''
+                            f_out.write(f"Trade Info,{idx}_{col_name},{val}\n")
 
             copied_csv += 1
         except Exception as e:
