@@ -901,7 +901,7 @@ def build_input_symbols_period(input_cfg):
 import configparser
 from datetime import datetime
 
-def copy_agent_outputs(mt5_tester_path, reports_path, symbol_period=None):
+def copy_agent_outputs(mt5_tester_path, reports_path, symbol_period=None, run_start_time=None):
     def read_file_safe(filepath):
         try:
             with open(filepath, 'r', encoding='utf-16') as f: return f.read()
@@ -961,6 +961,12 @@ def copy_agent_outputs(mt5_tester_path, reports_path, symbol_period=None):
             if csv_filename.lower().endswith('_trades.csv'): continue
             source_csv = os.path.join(filepath, csv_filename)
             mtime = os.path.getmtime(source_csv)
+            # Chỉ lấy file được tạo/sửa sau khi bắt đầu run hiện tại
+            if run_start_time is not None and mtime < run_start_time:
+                continue
+            # Chỉ lấy file thuộc đúng symbol (tên file phải chứa symbol_period)
+            if symbol_period and symbol_period.upper() not in csv_filename.upper():
+                continue
             all_csv_entries.append((mtime, csv_filename, filepath, foldername))
 
     # --- BƯỚC 2: Sort theo thời gian chỉnh sửa ---
@@ -1083,7 +1089,7 @@ def convert_xml_to_xlsx(opt_report_path, target_path):
 def run_one_job(terminal_idx, mt5_folder_path, mt5_tester_path, reports_path, mt5_program_path,
                 input_cfg, job_queue, state_lock, total_jobs, completed_counter, stop_event):
     """Worker chạy trên 1 MT5 terminal, lấy job từ queue cho đến hết."""
-    symbol_subfix = input_cfg.get('Symbols', 'subfix')
+    symbol_subfix = input_cfg.get('Symbols', 'subfix', fallback='')
     model = input_cfg.get('Tester', 'model')
     model_name = model
     if model == '4':
@@ -1117,7 +1123,9 @@ def run_one_job(terminal_idx, mt5_folder_path, mt5_tester_path, reports_path, mt
         todate = input_cfg.get('Tester', 'todate')
 
         report_filename = f'opt_{symbol}{symbol_subfix}_{period}_{from_date}_{todate}_{model_name}'
-        report_path_for_ini = '\\' + os.path.join('reports', report_filename)
+        symbol_report_dir = reports_path / f'{symbol}{symbol_subfix}'
+        symbol_report_dir.mkdir(parents=True, exist_ok=True)
+        report_path_for_ini = '\\' + os.path.join('reports', f'{symbol}{symbol_subfix}', report_filename)
 
         # Leverage: "1:100" → "100" (MT5 chỉ nhận số, không nhận format "1:100")
         leverage_raw = input_cfg.get('Tester', 'leverage', fallback='100')
@@ -1148,15 +1156,16 @@ def run_one_job(terminal_idx, mt5_folder_path, mt5_tester_path, reports_path, mt
                 f.write(f'{key}={val}\n')
 
         log(f'[Terminal {terminal_idx}] Launching MT5: {mt5_program_path}')
+        run_start_time = time.time()
         subprocess.call([mt5_program_path, '/config:' + str(config_path)])
 
 
-        opt_report_path = reports_path / f'{report_filename}.xml'
-        target_path     = reports_path / f'{report_filename}.xlsx'
+        opt_report_path = symbol_report_dir / f'{report_filename}.xml'
+        target_path     = symbol_report_dir / f'{report_filename}.xlsx'
 
         if opt_report_path.exists():
             convert_xml_to_xlsx(opt_report_path, target_path)
-            copied_csv, copied_txt = copy_agent_outputs(mt5_tester_path, reports_path, f'{symbol}{symbol_subfix}_{period}')
+            copied_csv, copied_txt = copy_agent_outputs(mt5_tester_path, reports_path, f'{symbol}{symbol_subfix}_{period}', run_start_time)
             log(f'[Terminal {terminal_idx}] Done: {symbol} {period} | csv={copied_csv} txt={copied_txt}')
             # Cập nhật state.txt ngay sau khi job hoàn thành (an toàn khi tắt máy đột ngột)
             with state_lock:

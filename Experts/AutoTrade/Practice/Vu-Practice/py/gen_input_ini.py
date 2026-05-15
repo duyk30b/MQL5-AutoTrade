@@ -274,10 +274,25 @@ def read_set_file(set_path):
 
 
 def generate_input_ini(mq5_path, output_path=None, selected_terminals=None):
-    mq5_path = Path(mq5_path)
+    mq5_path = Path(mq5_path).resolve()
     if not mq5_path.exists():
         print(f"Không tìm thấy file: {mq5_path}")
         sys.exit(1)
+
+    # Chọn MT5 terminal(s) trước để biết experts_dir
+    if selected_terminals is None:
+        selected_terminals = select_mt5_terminal()
+
+    # Copy EA vào root Experts/ nếu chưa ở đó
+    if selected_terminals and selected_terminals[0][0]:
+        appdata = Path(os.environ.get('APPDATA', ''))
+        experts_root = appdata / 'MetaQuotes' / 'Terminal' / selected_terminals[0][0] / 'MQL5' / 'Experts'
+        dest = experts_root / mq5_path.name
+        if dest.resolve() != mq5_path.resolve():
+            experts_root.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(str(mq5_path), str(dest))
+            print(f"[Copy] {mq5_path.name} → {dest}")
+            mq5_path = dest
 
     print(f"Đang đọc EA: {mq5_path}")
     source = collect_source(mq5_path)
@@ -290,10 +305,6 @@ def generate_input_ini(mq5_path, output_path=None, selected_terminals=None):
     expert_path = relative_expert_path(mq5_path)
     tester = DEFAULT_TESTER.copy()
     tester["expert"] = expert_path
-
-    # Chọn MT5 terminal(s)
-    if selected_terminals is None:
-        selected_terminals = select_mt5_terminal()
 
     lines = []
 
