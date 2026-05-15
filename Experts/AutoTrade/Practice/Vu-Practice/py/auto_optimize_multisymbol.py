@@ -558,7 +558,7 @@ def inject_ea(mq5_path: Path, magic: int) -> bool:
     if re.search(r'\bOnTester\s*\([^)]*\)', source):
         brace = _inj_find_func_open_brace(source, r'\bdouble\s+OnTester\s*\([^)]*\)')
         if brace is not None:
-            source = _inj_inject_after(source, brace, f'   _er_OnTester({prefix}{ms});\n')
+            source = _inj_inject_after(source, brace, f'   return _er_OnTester({prefix}{ms});\n')
     else:
         source = source.rstrip() + f'\ndouble OnTester()\n  {{\n   return _er_OnTester({prefix}{ms});\n  }}\n'
 
@@ -1072,21 +1072,40 @@ def copy_agent_outputs(mt5_tester_path, reports_path, symbol_period=None, run_st
 
 
 def convert_xml_to_xlsx(opt_report_path, target_path):
-    input_data = ET.parse(opt_report_path)
-    root = input_data.getroot()
-    prefix = '{urn:schemas-microsoft-com:office:spreadsheet}'
-    row = 0
-    data = []
-    for child in root.iter(prefix + 'Row'):
-        row += 1
-    for child in root.iter(prefix + 'Data'):
-        data.append(child.text)
-    collume = len(data) // row
-    num = np.array(data)
-    reshaped = num.reshape(row, collume)
-    df = pd.DataFrame(reshaped)
+    root = ET.parse(opt_report_path).getroot()
+    ns = '{urn:schemas-microsoft-com:office:spreadsheet}'
+    rows_data = []
+    for row_el in root.iter(ns + 'Row'):
+        row_vals = []
+        col_idx = 0
+        for cell_el in row_el.findall(ns + 'Cell'):
+            # ss:Index = nhảy đến cột cụ thể (bỏ qua cột trống ở giữa)
+            idx_attr = cell_el.get(ns + 'Index')
+            if idx_attr is not None:
+                target_col = int(idx_attr) - 1  # 1-based → 0-based
+                while col_idx < target_col:
+                    row_vals.append('')
+                    col_idx += 1
+            data_el = cell_el.find(ns + 'Data')
+            val = data_el.text if data_el is not None else ''
+            row_vals.append(val)
+            col_idx += 1
+            # ss:MergeAcross = ô gộp nhiều cột
+            merge = cell_el.get(ns + 'MergeAcross')
+            if merge is not None:
+                for _ in range(int(merge)):
+                    row_vals.append('')
+                    col_idx += 1
+        rows_data.append(row_vals)
+    if not rows_data:
+        return
+    max_cols = max(len(r) for r in rows_data)
+    for r in rows_data:
+        r += [''] * (max_cols - len(r))
+    df = pd.DataFrame(rows_data)
     df.to_excel(target_path, header=False, index=False)
     os.remove(opt_report_path)
+
 
 
 def run_one_job(terminal_idx, mt5_folder_path, mt5_tester_path, reports_path, mt5_program_path,
