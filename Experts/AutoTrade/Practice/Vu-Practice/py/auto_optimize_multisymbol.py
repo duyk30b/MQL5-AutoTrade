@@ -959,6 +959,9 @@ def copy_agent_outputs(mt5_tester_path, reports_path, symbol_period=None, run_st
         for csv_filename in os.listdir(filepath):
             if not csv_filename.lower().endswith('.csv'): continue
             if csv_filename.lower().endswith('_trades.csv'): continue
+            if csv_filename.lower().endswith('_equity_day.csv'): continue
+            if csv_filename.lower().endswith('_d1_balance.csv'): continue  # D_OnTester cũ
+            if '_pass_' not in csv_filename.lower(): continue               # chỉ lấy file inject
             source_csv = os.path.join(filepath, csv_filename)
             mtime = os.path.getmtime(source_csv)
             # Chỉ lấy file được tạo/sửa sau khi bắt đầu run hiện tại
